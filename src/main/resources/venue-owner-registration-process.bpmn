@@ -1,0 +1,623 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:modeler="http://camunda.org/schema/modeler/1.0" id="Definitions_0wmo419" targetNamespace="http://bpmn.io/schema/bpmn" exporter="Camunda Modeler" exporterVersion="5.48.0" modeler:executionPlatform="Camunda Cloud" modeler:executionPlatformVersion="8.9.0">
+  <bpmn:error id="Error_CreateApp" name="Create Application Failed" errorCode="CREATE_APP_FAILED" />
+  <bpmn:error id="Error_GetPresigned" name="Get Presigned Failed" errorCode="GET_PRESIGNED_FAILED" />
+  <bpmn:message id="Message_AppCreated" name="OwnerApplicationCreated">
+    <bpmn:extensionElements>
+      <zeebe:subscription correlationKey="=ownerApplicationId" />
+    </bpmn:extensionElements>
+  </bpmn:message>
+  <bpmn:message id="Message_FileMove" name="OwnerDocumentsCreated">
+    <bpmn:extensionElements>
+      <zeebe:subscription correlationKey="=ownerApplicationId" />
+    </bpmn:extensionElements>
+  </bpmn:message>
+  <bpmn:collaboration id="Collaboration_VenueOwnerRegistrationProcess">
+    <bpmn:participant id="Participant_VenueOwnerRegistrationProcess" name="Venue Owner Registration Process" processRef="Process_VenueOwnerRegistration" />
+    <bpmn:participant id="Participant_MoveFilesProcess" name="Move Files Process" processRef="Process_MoveFiles" />
+    <bpmn:participant id="Participant_NotificationProcess" name="Notification Process" processRef="Process_Notification" />
+    <bpmn:messageFlow id="Flow_1t4dxu4" sourceRef="Event_PublishMoveFile" targetRef="Event_MoveFiles" />
+    <bpmn:messageFlow id="Flow_01v05s9" sourceRef="Event_PublishCreated" targetRef="Event_Created" />
+    <bpmn:messageFlow id="Flow_0f0xezh" sourceRef="Event_PublishApproved" targetRef="Event_Approved" />
+    <bpmn:messageFlow id="Flow_0n0uhfh" sourceRef="Event_PublishRejected" targetRef="Event_Rejected" />
+  </bpmn:collaboration>
+  <bpmn:process id="Process_VenueOwnerRegistration" name="Venue Owner Registration Process" isExecutable="true">
+    <bpmn:laneSet id="LaneSet_00vmf0s">
+      <bpmn:lane id="Lane_User" name="User">
+        <bpmn:flowNodeRef>StartEvent_SubmitClicked</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_UserUpload</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_System01" name="System">
+        <bpmn:flowNodeRef>Task_CreateOwnerApplication</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Fork_Submit</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_GetPresignedURLs</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_Submit</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_CreateDocuments</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_CreateVenueOwnerProfile</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_AssignRole</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_UpdateApprovedStatus</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Event_PublishApproved</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>BoundaryEvent_CreateAppFailed</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>BoundaryEvent_GetPresignedFailed</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Event_PublishMoveFile</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_SaveDocuments</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Event_PublishCreated</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>EndEvent_CreateAppFailed</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>EndEvent_GetPresignedFailed</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>EndEvent_Approved</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_Admin" name="Admin">
+        <bpmn:flowNodeRef>Gateway_Approved</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_AdminReview</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_System02" name="System">
+        <bpmn:flowNodeRef>Task_RejectApp</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Event_PublishRejected</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>EndEvent_Rejected</bpmn:flowNodeRef>
+      </bpmn:lane>
+    </bpmn:laneSet>
+    <bpmn:startEvent id="StartEvent_SubmitClicked" name="Click submit">
+      <bpmn:outgoing>Flow_StartToFork</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:serviceTask id="Task_CreateOwnerApplication" name="Create owner application&#10;(venue-service)">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="createOwnerApplication" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_ForkToSaveApp</bpmn:incoming>
+      <bpmn:outgoing>Flow_1bgu5wi</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:parallelGateway id="Fork_Submit">
+      <bpmn:incoming>Flow_StartToFork</bpmn:incoming>
+      <bpmn:outgoing>Flow_ForkToSaveApp</bpmn:outgoing>
+      <bpmn:outgoing>Flow_ForkToGetPresigned</bpmn:outgoing>
+    </bpmn:parallelGateway>
+    <bpmn:serviceTask id="Task_GetPresignedURLs" name="Get presigned URLs&#10;(storage-service)">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="getPresignedURLs" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_ForkToGetPresigned</bpmn:incoming>
+      <bpmn:outgoing>Flow_0wy5rt3</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:parallelGateway id="Gateway_Submit">
+      <bpmn:incoming>Flow_0wy5rt3</bpmn:incoming>
+      <bpmn:incoming>Flow_1bgu5wi</bpmn:incoming>
+      <bpmn:outgoing>Flow_1emausm</bpmn:outgoing>
+    </bpmn:parallelGateway>
+    <bpmn:userTask id="Task_UserUpload" name="Upload documents to R2&#10;(Angular)">
+      <bpmn:extensionElements>
+        <zeebe:userTask />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_1emausm</bpmn:incoming>
+      <bpmn:outgoing>Flow_07rlae2</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:serviceTask id="Task_CreateDocuments" name="Create documents&#10;(venue-service)">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="createDocuments" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_07rlae2</bpmn:incoming>
+      <bpmn:outgoing>Flow_06q6rha</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:boundaryEvent id="BoundaryEvent_CreateAppFailed" attachedToRef="Task_CreateOwnerApplication">
+      <bpmn:outgoing>Flow_CreateAppFailedToEnd</bpmn:outgoing>
+      <bpmn:errorEventDefinition id="ErrorEventDefinition_CreateApp" errorRef="Error_CreateApp" />
+    </bpmn:boundaryEvent>
+    <bpmn:boundaryEvent id="BoundaryEvent_GetPresignedFailed" attachedToRef="Task_GetPresignedURLs">
+      <bpmn:outgoing>Flow_GetPresignedFailedToEnd</bpmn:outgoing>
+      <bpmn:errorEventDefinition id="ErrorEventDefinition_GetPresigned" errorRef="Error_GetPresigned" />
+    </bpmn:boundaryEvent>
+    <bpmn:sequenceFlow id="Flow_StartToFork" sourceRef="StartEvent_SubmitClicked" targetRef="Fork_Submit" />
+    <bpmn:sequenceFlow id="Flow_ForkToSaveApp" sourceRef="Fork_Submit" targetRef="Task_CreateOwnerApplication" />
+    <bpmn:sequenceFlow id="Flow_ForkToGetPresigned" sourceRef="Fork_Submit" targetRef="Task_GetPresignedURLs" />
+    <bpmn:sequenceFlow id="Flow_0wy5rt3" sourceRef="Task_GetPresignedURLs" targetRef="Gateway_Submit" />
+    <bpmn:sequenceFlow id="Flow_CreateAppFailedToEnd" sourceRef="BoundaryEvent_CreateAppFailed" targetRef="EndEvent_CreateAppFailed" />
+    <bpmn:sequenceFlow id="Flow_1emausm" sourceRef="Gateway_Submit" targetRef="Task_UserUpload" />
+    <bpmn:sequenceFlow id="Flow_GetPresignedFailedToEnd" sourceRef="BoundaryEvent_GetPresignedFailed" targetRef="EndEvent_GetPresignedFailed" />
+    <bpmn:sequenceFlow id="Flow_07rlae2" sourceRef="Task_UserUpload" targetRef="Task_CreateDocuments" />
+    <bpmn:sequenceFlow id="Flow_06q6rha" sourceRef="Task_CreateDocuments" targetRef="Event_PublishMoveFile" />
+    <bpmn:sequenceFlow id="Flow_1fbqorl" sourceRef="Event_PublishMoveFile" targetRef="Task_SaveDocuments" />
+    <bpmn:sequenceFlow id="Flow_0jrb6p1" sourceRef="Task_AdminReview" targetRef="Gateway_Approved" />
+    <bpmn:exclusiveGateway id="Gateway_Approved" name="Approved">
+      <bpmn:incoming>Flow_0jrb6p1</bpmn:incoming>
+      <bpmn:outgoing>Flow_1g12iu4</bpmn:outgoing>
+      <bpmn:outgoing>Flow_025iqxy</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:sequenceFlow id="Flow_0b8plog" sourceRef="Task_SaveDocuments" targetRef="Event_PublishCreated" />
+    <bpmn:serviceTask id="Task_RejectApp" name="Update rejected status&#10;(venue-service)">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="rejectApplication" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_1g12iu4</bpmn:incoming>
+      <bpmn:outgoing>Flow_0vmwudl</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:sequenceFlow id="Flow_1g12iu4" name="false" sourceRef="Gateway_Approved" targetRef="Task_RejectApp">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">=approved = false</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_0vmwudl" sourceRef="Task_RejectApp" targetRef="Event_PublishRejected" />
+    <bpmn:serviceTask id="Task_CreateVenueOwnerProfile" name="Create venue owner profile&#10;(venue-service)">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="createVenueOwnerProfile" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_025iqxy</bpmn:incoming>
+      <bpmn:outgoing>Flow_0vet7mo</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:sequenceFlow id="Flow_025iqxy" name="true" sourceRef="Gateway_Approved" targetRef="Task_CreateVenueOwnerProfile">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">=approved = true</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:serviceTask id="Task_AssignRole" name="Assign venue owner role&#10;(auth-service)">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="assignRole" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_0vet7mo</bpmn:incoming>
+      <bpmn:outgoing>Flow_103enab</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:sequenceFlow id="Flow_0vet7mo" sourceRef="Task_CreateVenueOwnerProfile" targetRef="Task_AssignRole" />
+    <bpmn:sequenceFlow id="Flow_103enab" sourceRef="Task_AssignRole" targetRef="Task_UpdateApprovedStatus" />
+    <bpmn:serviceTask id="Task_UpdateApprovedStatus" name="Update approved status&#10;(venue-service)">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="approveApplication" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_103enab</bpmn:incoming>
+      <bpmn:outgoing>Flow_1dobbbc</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:intermediateThrowEvent id="Event_PublishApproved" name="Publish approve event">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="publishApprovedEvent" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_1dobbbc</bpmn:incoming>
+      <bpmn:outgoing>Flow_0yiji4a</bpmn:outgoing>
+      <bpmn:messageEventDefinition id="MessageEventDefinition_1udpbpx" messageRef="Message_1503dsq" />
+    </bpmn:intermediateThrowEvent>
+    <bpmn:sequenceFlow id="Flow_1dobbbc" sourceRef="Task_UpdateApprovedStatus" targetRef="Event_PublishApproved" />
+    <bpmn:intermediateThrowEvent id="Event_PublishRejected" name="Publish reject event">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="publishRejectedEvent" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_0vmwudl</bpmn:incoming>
+      <bpmn:outgoing>Flow_1lremef</bpmn:outgoing>
+      <bpmn:messageEventDefinition id="MessageEventDefinition_07f9g0u" messageRef="Message_1u51gck" />
+    </bpmn:intermediateThrowEvent>
+    <bpmn:intermediateThrowEvent id="Event_PublishMoveFile" name="Publish file move event">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="publishFileMoveEvent" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_06q6rha</bpmn:incoming>
+      <bpmn:outgoing>Flow_1fbqorl</bpmn:outgoing>
+      <bpmn:messageEventDefinition id="MessageEventDefinition_1wybhae" messageRef="Message_FileMove" />
+    </bpmn:intermediateThrowEvent>
+    <bpmn:serviceTask id="Task_SaveDocuments" name="Save documents&#10;(venue-service)">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="saveDocuments" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_1fbqorl</bpmn:incoming>
+      <bpmn:outgoing>Flow_0b8plog</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:intermediateThrowEvent id="Event_PublishCreated" name="Publish created event">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="publishOwnerApplicationCreated" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_0b8plog</bpmn:incoming>
+      <bpmn:outgoing>Flow_1bvph29</bpmn:outgoing>
+      <bpmn:messageEventDefinition id="MessageEventDefinition_1eu0ipq" messageRef="Message_AppCreated" />
+    </bpmn:intermediateThrowEvent>
+    <bpmn:sequenceFlow id="Flow_1bvph29" sourceRef="Event_PublishCreated" targetRef="Task_AdminReview" />
+    <bpmn:userTask id="Task_AdminReview" name="Review application&#10;(Angular)">
+      <bpmn:extensionElements>
+        <zeebe:userTask />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_1bvph29</bpmn:incoming>
+      <bpmn:outgoing>Flow_0jrb6p1</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:sequenceFlow id="Flow_1bgu5wi" sourceRef="Task_CreateOwnerApplication" targetRef="Gateway_Submit" />
+    <bpmn:endEvent id="EndEvent_CreateAppFailed" name="Create failed">
+      <bpmn:incoming>Flow_CreateAppFailedToEnd</bpmn:incoming>
+      <bpmn:terminateEventDefinition id="TerminateEventDefinition_1d6gn7v" />
+    </bpmn:endEvent>
+    <bpmn:endEvent id="EndEvent_GetPresignedFailed" name="Get failed">
+      <bpmn:incoming>Flow_GetPresignedFailedToEnd</bpmn:incoming>
+      <bpmn:terminateEventDefinition id="TerminateEventDefinition_0k86tpe" />
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_0yiji4a" sourceRef="Event_PublishApproved" targetRef="EndEvent_Approved" />
+    <bpmn:endEvent id="EndEvent_Approved">
+      <bpmn:incoming>Flow_0yiji4a</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:endEvent id="EndEvent_Rejected">
+      <bpmn:incoming>Flow_1lremef</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_1lremef" sourceRef="Event_PublishRejected" targetRef="EndEvent_Rejected" />
+  </bpmn:process>
+  <bpmn:process id="Process_MoveFiles" name="Move Files Process" isExecutable="false">
+    <bpmn:startEvent id="Event_MoveFiles" name="Documents created">
+      <bpmn:outgoing>Flow_0hahnww</bpmn:outgoing>
+      <bpmn:messageEventDefinition id="MessageEventDefinition_03g1j29" messageRef="Message_FileMove" />
+    </bpmn:startEvent>
+    <bpmn:serviceTask id="Task_MoveFilesR2" name="Move files on R2&#10;(storage-service)">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="moveFilesR2" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_0hahnww</bpmn:incoming>
+      <bpmn:outgoing>Flow_0vknhhf</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:endEvent id="EndEvent_MoveFiles">
+      <bpmn:incoming>Flow_0vknhhf</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_0hahnww" sourceRef="Event_MoveFiles" targetRef="Task_MoveFilesR2" />
+    <bpmn:sequenceFlow id="Flow_0vknhhf" sourceRef="Task_MoveFilesR2" targetRef="EndEvent_MoveFiles" />
+  </bpmn:process>
+  <bpmn:process id="Process_Notification" name="Notification Process" isExecutable="false">
+    <bpmn:startEvent id="Event_Created" name="CreatedEvent">
+      <bpmn:outgoing>Flow_0zh7yv4</bpmn:outgoing>
+      <bpmn:messageEventDefinition id="MessageEventDefinition_14qi5mc" messageRef="Message_AppCreated" />
+    </bpmn:startEvent>
+    <bpmn:startEvent id="Event_Approved" name="ApprovedEvent">
+      <bpmn:outgoing>Flow_0tj19og</bpmn:outgoing>
+      <bpmn:messageEventDefinition id="MessageEventDefinition_1cgnee9" messageRef="Message_1503dsq" />
+    </bpmn:startEvent>
+    <bpmn:startEvent id="Event_Rejected" name="RejectedEvent">
+      <bpmn:outgoing>Flow_142ztpc</bpmn:outgoing>
+      <bpmn:messageEventDefinition id="MessageEventDefinition_1oc7r6a" messageRef="Message_1u51gck" />
+    </bpmn:startEvent>
+    <bpmn:sequenceFlow id="Flow_0tj19og" sourceRef="Event_Approved" targetRef="Task_CreateNotification" />
+    <bpmn:sequenceFlow id="Flow_0zh7yv4" sourceRef="Event_Created" targetRef="Task_CreateNotification" />
+    <bpmn:sequenceFlow id="Flow_142ztpc" sourceRef="Event_Rejected" targetRef="Task_CreateNotification" />
+    <bpmn:serviceTask id="Task_CreateNotification" name="Create notification&#10;(notification-service)">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="createNotification" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_0tj19og</bpmn:incoming>
+      <bpmn:incoming>Flow_0zh7yv4</bpmn:incoming>
+      <bpmn:incoming>Flow_142ztpc</bpmn:incoming>
+      <bpmn:outgoing>Flow_01elcgv</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:sendTask id="Task_Notify" name="Notify&#10;(notification-service)">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="notifyUser" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_01elcgv</bpmn:incoming>
+      <bpmn:outgoing>Flow_0q1knxa</bpmn:outgoing>
+    </bpmn:sendTask>
+    <bpmn:endEvent id="EndEvent_StatusEvent">
+      <bpmn:incoming>Flow_0q1knxa</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_01elcgv" sourceRef="Task_CreateNotification" targetRef="Task_Notify" />
+    <bpmn:sequenceFlow id="Flow_0q1knxa" sourceRef="Task_Notify" targetRef="EndEvent_StatusEvent" />
+  </bpmn:process>
+  <bpmn:message id="Message_1503dsq" name="OwnerApplicationApproved">
+    <bpmn:extensionElements>
+      <zeebe:subscription correlationKey="=ownerApplicationId" />
+    </bpmn:extensionElements>
+  </bpmn:message>
+  <bpmn:message id="Message_1u51gck" name="OwnerApplicationRejected">
+    <bpmn:extensionElements>
+      <zeebe:subscription correlationKey="=ownerApplicationId" />
+    </bpmn:extensionElements>
+  </bpmn:message>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Collaboration_VenueOwnerRegistrationProcess">
+      <bpmndi:BPMNShape id="Participant_0h0bom9_di" bpmnElement="Participant_VenueOwnerRegistrationProcess" isHorizontal="true">
+        <dc:Bounds x="150" y="349" width="2090" height="971" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_13oqssi_di" bpmnElement="Lane_System02" isHorizontal="true">
+        <dc:Bounds x="180" y="1070" width="2060" height="250" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_1cxmriu_di" bpmnElement="Lane_Admin" isHorizontal="true">
+        <dc:Bounds x="180" y="820" width="2060" height="250" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_0brslrv_di" bpmnElement="Lane_System01" isHorizontal="true">
+        <dc:Bounds x="180" y="549" width="2060" height="271" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_1f3c9k9_di" bpmnElement="Lane_User" isHorizontal="true">
+        <dc:Bounds x="180" y="349" width="2060" height="200" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="StartEvent_SubmitClicked_di" bpmnElement="StartEvent_SubmitClicked">
+        <dc:Bounds x="242" y="432" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="230" y="403" width="60" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_SaveApplication_di" bpmnElement="Task_CreateOwnerApplication">
+        <dc:Bounds x="380" y="560" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Fork_Submit_di" bpmnElement="Fork_Submit" isMarkerVisible="true">
+        <dc:Bounds x="275" y="653" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_GetPresigned_di" bpmnElement="Task_GetPresignedURLs">
+        <dc:Bounds x="380" y="690" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_1ynq76r_di" bpmnElement="Gateway_Submit">
+        <dc:Bounds x="725" y="653" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_UserUpload_di" bpmnElement="Task_UserUpload">
+        <dc:Bounds x="850" y="410" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_1a9hux0_di" bpmnElement="Task_CreateDocuments">
+        <dc:Bounds x="1050" y="638" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_Approved_di" bpmnElement="Gateway_Approved" isMarkerVisible="true">
+        <dc:Bounds x="1685" y="925" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1745" y="943" width="48" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_RejectApp_di" bpmnElement="Task_RejectApp">
+        <dc:Bounds x="1660" y="1160" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_CreateProfileAndRole_di" bpmnElement="Task_CreateVenueOwnerProfile">
+        <dc:Bounds x="1660" y="638" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_1wwre1u_di" bpmnElement="Task_AssignRole">
+        <dc:Bounds x="1810" y="638" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_0bc4rjl" bpmnElement="Task_UpdateApprovedStatus">
+        <dc:Bounds x="1962" y="638" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_1l3lpuc" bpmnElement="Event_PublishApproved">
+        <dc:Bounds x="2142" y="660" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2121" y="622" width="79" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_1ebx4ap_di" bpmnElement="Event_PublishRejected">
+        <dc:Bounds x="2142" y="1182" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2126" y="1145.5" width="67" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_0nq2ylw_di" bpmnElement="Event_PublishMoveFile">
+        <dc:Bounds x="1242" y="660" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1218" y="706" width="84" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_136snpt_di" bpmnElement="Task_SaveDocuments">
+        <dc:Bounds x="1350" y="638" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_0vf03di_di" bpmnElement="Event_PublishCreated">
+        <dc:Bounds x="1542" y="660" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1562" y="636" width="76" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_AdminReview_di" bpmnElement="Task_AdminReview">
+        <dc:Bounds x="1510" y="910" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_1g20aic_di" bpmnElement="EndEvent_CreateAppFailed">
+        <dc:Bounds x="572" y="622" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="560" y="665" width="63" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_12d23a5_di" bpmnElement="EndEvent_GetPresignedFailed">
+        <dc:Bounds x="572" y="752" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="566" y="795" width="48" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_0j3yrud_di" bpmnElement="EndEvent_Approved">
+        <dc:Bounds x="2142" y="742" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_0vj2mmg_di" bpmnElement="EndEvent_Rejected">
+        <dc:Bounds x="2142" y="1262" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BoundaryEvent_GetPresignedFailed_di" bpmnElement="BoundaryEvent_GetPresignedFailed">
+        <dc:Bounds x="462" y="752" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BoundaryEvent_CreateAppFailed_di" bpmnElement="BoundaryEvent_CreateAppFailed">
+        <dc:Bounds x="462" y="622" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_StartToFork_di" bpmnElement="Flow_StartToFork">
+        <di:waypoint x="260" y="468" />
+        <di:waypoint x="260" y="678" />
+        <di:waypoint x="275" y="678" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ForkToSaveApp_di" bpmnElement="Flow_ForkToSaveApp">
+        <di:waypoint x="300" y="653" />
+        <di:waypoint x="300" y="600" />
+        <di:waypoint x="380" y="600" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ForkToGetPresigned_di" bpmnElement="Flow_ForkToGetPresigned">
+        <di:waypoint x="300" y="703" />
+        <di:waypoint x="300" y="730" />
+        <di:waypoint x="380" y="730" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_0wy5rt3_di" bpmnElement="Flow_0wy5rt3">
+        <di:waypoint x="480" y="730" />
+        <di:waypoint x="750" y="730" />
+        <di:waypoint x="750" y="703" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_CreateAppFailedToEnd_di" bpmnElement="Flow_CreateAppFailedToEnd">
+        <di:waypoint x="498" y="640" />
+        <di:waypoint x="572" y="640" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_1emausm_di" bpmnElement="Flow_1emausm">
+        <di:waypoint x="775" y="678" />
+        <di:waypoint x="900" y="678" />
+        <di:waypoint x="900" y="490" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_GetPresignedFailedToEnd_di" bpmnElement="Flow_GetPresignedFailedToEnd">
+        <di:waypoint x="498" y="770" />
+        <di:waypoint x="572" y="770" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_07rlae2_di" bpmnElement="Flow_07rlae2">
+        <di:waypoint x="950" y="450" />
+        <di:waypoint x="1100" y="449" />
+        <di:waypoint x="1100" y="638" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_06q6rha_di" bpmnElement="Flow_06q6rha">
+        <di:waypoint x="1150" y="678" />
+        <di:waypoint x="1242" y="678" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_1fbqorl_di" bpmnElement="Flow_1fbqorl">
+        <di:waypoint x="1278" y="678" />
+        <di:waypoint x="1350" y="678" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_0jrb6p1_di" bpmnElement="Flow_0jrb6p1">
+        <di:waypoint x="1610" y="950" />
+        <di:waypoint x="1685" y="950" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_0b8plog_di" bpmnElement="Flow_0b8plog">
+        <di:waypoint x="1450" y="678" />
+        <di:waypoint x="1542" y="678" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_1g12iu4_di" bpmnElement="Flow_1g12iu4">
+        <di:waypoint x="1710" y="975" />
+        <di:waypoint x="1710" y="1160" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1713" y="1023" width="24" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_0vmwudl_di" bpmnElement="Flow_0vmwudl">
+        <di:waypoint x="1760" y="1200" />
+        <di:waypoint x="2142" y="1200" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_025iqxy_di" bpmnElement="Flow_025iqxy">
+        <di:waypoint x="1710" y="925" />
+        <di:waypoint x="1710" y="718" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1720" y="873" width="19" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_0vet7mo_di" bpmnElement="Flow_0vet7mo">
+        <di:waypoint x="1760" y="678" />
+        <di:waypoint x="1810" y="678" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_103enab_di" bpmnElement="Flow_103enab">
+        <di:waypoint x="1910" y="678" />
+        <di:waypoint x="1962" y="678" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_1dobbbc_di" bpmnElement="Flow_1dobbbc">
+        <di:waypoint x="2062" y="678" />
+        <di:waypoint x="2142" y="678" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_1bvph29_di" bpmnElement="Flow_1bvph29">
+        <di:waypoint x="1560" y="696" />
+        <di:waypoint x="1560" y="910" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_1bgu5wi_di" bpmnElement="Flow_1bgu5wi">
+        <di:waypoint x="480" y="600" />
+        <di:waypoint x="750" y="600" />
+        <di:waypoint x="750" y="653" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_0yiji4a_di" bpmnElement="Flow_0yiji4a">
+        <di:waypoint x="2160" y="696" />
+        <di:waypoint x="2160" y="742" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_1lremef_di" bpmnElement="Flow_1lremef">
+        <di:waypoint x="2160" y="1218" />
+        <di:waypoint x="2160" y="1262" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="Participant_04ycnde_di" bpmnElement="Participant_MoveFilesProcess" isHorizontal="true">
+        <dc:Bounds x="1175" y="76" width="442" height="250" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_1ak695r_di" bpmnElement="Event_MoveFiles">
+        <dc:Bounds x="1241" y="188" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1231" y="151" width="56" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_0idpb5e_di" bpmnElement="Task_MoveFilesR2">
+        <dc:Bounds x="1357" y="166" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_170fukn_di" bpmnElement="EndEvent_MoveFiles">
+        <dc:Bounds x="1549" y="188" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_0hahnww_di" bpmnElement="Flow_0hahnww">
+        <di:waypoint x="1277" y="206" />
+        <di:waypoint x="1357" y="206" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_0vknhhf_di" bpmnElement="Flow_0vknhhf">
+        <di:waypoint x="1457" y="206" />
+        <di:waypoint x="1549" y="206" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="BPMNShape_17ymonb" bpmnElement="Participant_NotificationProcess" isHorizontal="true">
+        <dc:Bounds x="2260" y="820" width="650" height="250" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_0nisiy8" bpmnElement="Event_Created">
+        <dc:Bounds x="2328" y="932" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2350" y="913" width="68" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_1plkmxr" bpmnElement="Event_Approved">
+        <dc:Bounds x="2328" y="842" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2356" y="828" width="76" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_0rtg3lu" bpmnElement="Event_Rejected">
+        <dc:Bounds x="2328" y="1012" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2364" y="996" width="72" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_0l7xv2m" bpmnElement="Task_CreateNotification">
+        <dc:Bounds x="2479" y="910" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_1h3tzib" bpmnElement="Task_Notify">
+        <dc:Bounds x="2669" y="910" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_1ne8grj" bpmnElement="EndEvent_StatusEvent">
+        <dc:Bounds x="2851" y="932" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_0tj19og_di" bpmnElement="Flow_0tj19og">
+        <di:waypoint x="2364" y="860" />
+        <di:waypoint x="2529" y="860" />
+        <di:waypoint x="2529" y="910" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_0zh7yv4_di" bpmnElement="Flow_0zh7yv4">
+        <di:waypoint x="2364" y="950" />
+        <di:waypoint x="2479" y="950" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_142ztpc_di" bpmnElement="Flow_142ztpc">
+        <di:waypoint x="2364" y="1030" />
+        <di:waypoint x="2529" y="1030" />
+        <di:waypoint x="2529" y="990" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_1ux1xg6" bpmnElement="Flow_01elcgv">
+        <di:waypoint x="2579" y="950" />
+        <di:waypoint x="2669" y="950" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_1p4090n" bpmnElement="Flow_0q1knxa">
+        <di:waypoint x="2769" y="950" />
+        <di:waypoint x="2851" y="950" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_1t4dxu4_di" bpmnElement="Flow_1t4dxu4">
+        <di:waypoint x="1259" y="660" />
+        <di:waypoint x="1259" y="224" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_01v05s9_di" bpmnElement="Flow_01v05s9">
+        <di:waypoint x="1560" y="660" />
+        <di:waypoint x="1560" y="380" />
+        <di:waypoint x="2300" y="380" />
+        <di:waypoint x="2300" y="950" />
+        <di:waypoint x="2328" y="950" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_0f0xezh_di" bpmnElement="Flow_0f0xezh">
+        <di:waypoint x="2178" y="678" />
+        <di:waypoint x="2346" y="678" />
+        <di:waypoint x="2346" y="842" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_0n0uhfh_di" bpmnElement="Flow_0n0uhfh">
+        <di:waypoint x="2178" y="1200" />
+        <di:waypoint x="2346" y="1200" />
+        <di:waypoint x="2346" y="1048" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>
