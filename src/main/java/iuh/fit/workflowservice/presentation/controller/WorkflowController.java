@@ -1,8 +1,6 @@
 package iuh.fit.workflowservice.presentation.controller;
 
 import io.camunda.client.CamundaClient;
-import io.camunda.client.annotation.JobWorker;
-import io.camunda.client.api.response.ActivatedJob;
 import io.camunda.client.api.response.ProcessInstanceEvent;
 import io.camunda.client.api.search.enums.UserTaskState;
 import io.camunda.client.api.search.response.SearchResponse;
@@ -11,12 +9,14 @@ import io.camunda.client.api.search.response.Variable;
 import iuh.fit.workflowservice.application.exception.ServiceException;
 import iuh.fit.workflowservice.application.port.security.CurrentUserProvider;
 import iuh.fit.workflowservice.application.util.BaseUtil;
+import iuh.fit.workflowservice.presentation.request.CompleteReviewRequest;
 import iuh.fit.workflowservice.presentation.request.CompleteTaskRequest;
 import iuh.fit.workflowservice.presentation.response.ProcessInstanceResponse;
 import iuh.fit.workflowservice.presentation.response.UserTaskResponse;
 import iuh.fit.workflowservice.presentation.request.StartProcessRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -26,6 +26,7 @@ import java.util.*;
 @RestController
 @RequestMapping("/api/v1/workflows")
 @RequiredArgsConstructor
+@Slf4j
 public class WorkflowController {
 
     private final CamundaClient camundaClient;
@@ -123,71 +124,76 @@ public class WorkflowController {
         return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
     }
 
-//    @PutMapping("/tasks/{taskKey}/assign")
-//    public ResponseEntity<Void> assignTask(
-//            @PathVariable long taskKey,
-//            @Valid @RequestBody AssignTaskRequest request
-//    ) {
-//        camundaClient.newAssignUserTaskCommand(taskKey)
-//                .assignee(request.assignee())
-//                .send()
-//                .join();
-//
-//        return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
-//    }
-//
-//    @GetMapping("/tasks")
-//    public ResponseEntity<List<UserTaskResponse>> listUserTasks(
-//            @RequestParam(value = "assignee", required = false) String assignee
-//    ) {
-//        UserTaskSearchRequest searchRequest = camundaClient.newUserTaskSearchRequest();
-//        if (assignee != null && !assignee.isBlank()) {
-//            searchRequest.filter(f -> f.assignee(assignee));
-//        }
-//
-//        SearchResponse<UserTask> searchResponse = searchRequest.send().join();
-//
-//        List<UserTaskResponse> responseList = searchResponse.items().stream()
-//                .map(task -> new UserTaskResponse(
-//                        task.getUserTaskKey(),
-//                        task.getName(),
-//                        task.getElementId(),
-//                        task.getAssignee(),
-//                        task.getState() != null ? task.getState().name() : null,
-//                        task.getProcessInstanceKey(),
-//                        task.getBpmnProcessId()
-//                ))
-//                .toList();
-//
-//        return ResponseEntity.ok(responseList);
-//    }
-//
-//    @GetMapping("/instances/{instanceKey}")
-//    public ResponseEntity<ProcessInstanceDetailResponse> getProcessInstance(@PathVariable long instanceKey) {
-//        SearchResponse<ProcessInstance> searchResponse = camundaClient.newProcessInstanceSearchRequest()
-//                .filter(f -> f.processInstanceKey(instanceKey))
-//                .send()
-//                .join();
-//
-//        List<ProcessInstance> items = searchResponse.items();
-//        if (items == null || items.isEmpty()) {
-//            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
-//        }
-//
-//        ProcessInstance instance = items.getFirst();
-//
-//        ProcessInstanceDetailResponse response = new ProcessInstanceDetailResponse(
-//                instance.getProcessInstanceKey(),
-//                instance.getProcessDefinitionId(),
-//                instance.getProcessDefinitionVersion(),
-//                instance.getProcessDefinitionKey(),
-//                instance.getState() != null ? instance.getState().name() : null,
-//                instance.getStartDate().toString(),
-//                instance.getEndDate().toString()
-//        );
-//
-//        return ResponseEntity.ok(response);
-//    }
+    @PostMapping("/owner-applications/{ownerApplicationId}/complete-review")
+    public ResponseEntity<Void> completeAdminReview(
+            @PathVariable String ownerApplicationId,
+            @Valid @RequestBody CompleteReviewRequest request
+    ) throws ServiceException
+    {
+        log.info("Received request to complete admin review for application: {}, approved: {}", ownerApplicationId, request.approved());
 
+        String reviewerIdStr = currentUserProvider.getCurrentUserId()
+                .orElseThrow(() -> new ServiceException("Bạn phải đăng nhập để thực hiện chức năng này."));
 
+        SearchResponse<UserTask> searchResponse = camundaClient.newUserTaskSearchRequest()
+                .filter(f -> f.elementId("Task_AdminReview")
+                              .state(UserTaskState.CREATED))
+                .send()
+                .join();
+
+        if (searchResponse.items() == null || searchResponse.items().isEmpty()) {
+            throw new ServiceException("Không tìm thấy task duyệt đơn chủ sân nào đang hoạt động");
+        }
+
+        for (UserTask task : searchResponse.items()) {
+            long instanceKey = task.getProcessInstanceKey();
+
+            SearchResponse<Variable> variablesResponse = camundaClient.newVariableSearchRequest()
+                    .filter(f -> f.scopeKey(instanceKey))
+                    .send()
+                    .join();
+
+            boolean matches = false;
+            Object ownerAppObj = null;
+
+            if (variablesResponse.items() != null) {
+                for (Variable variable : variablesResponse.items()) {
+                    if ("ownerApplication".equals(variable.getName())) {
+                        ownerAppObj = BaseUtil.convert(variable.getValue());
+                        if (variable.getValue() != null && variable.getValue().contains(ownerApplicationId)) {
+                            matches = true;
+                        }
+                    }
+                }
+            }
+
+            if (matches) {
+                log.info("Found matching user task key {} for owner application {}", task.getUserTaskKey(), ownerApplicationId);
+
+                Map<String, Object> variables = new HashMap<>();
+                variables.put("approved", request.approved());
+                variables.put("reviewerId", reviewerIdStr);
+
+                if (ownerAppObj instanceof Map) {
+                    Map<String, Object> ownerAppMap = (Map<String, Object>) ownerAppObj;
+
+                    ownerAppMap.put("status", request.approved() ? "APPROVED" : "REJECTED");
+                    ownerAppMap.put("rejectReason", request.rejectReason());
+                    ownerAppMap.put("reviewerId", reviewerIdStr);
+
+                    variables.put("ownerApplication", ownerAppMap);
+                }
+
+                camundaClient.newCompleteUserTaskCommand(task.getUserTaskKey())
+                        .variables(variables)
+                        .send()
+                        .join();
+
+                log.info("Successfully completed Admin Review task for owner application {} with approved = {}", ownerApplicationId, request.approved());
+                return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
+            }
+        }
+
+        throw new ServiceException("Không tìm thấy task duyệt cho đơn đăng ký này");
+    }
 }

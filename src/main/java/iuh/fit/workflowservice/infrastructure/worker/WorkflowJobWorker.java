@@ -45,4 +45,32 @@ public class WorkflowJobWorker {
                 .send()
                 .join();
     }
+
+    @JobWorker(type = "publishRejectedEvent")
+    public void handlePublishRejectedEvent(ActivatedJob job) {
+        LOGGER.info("Executing publishRejectedEvent for job: {}", job.getKey());
+
+        Map<String, Object> variables = job.getVariablesAsMap();
+
+        camundaClient.newPublishMessageCommand()
+                .messageName("OwnerApplicationRejected")
+                .correlationKey(UUID.randomUUID().toString())
+                .variables(variables)
+                .send()
+                .join();
+    }
+
+    @JobWorker(type = "publishApprovedEvent")
+    public void handlePublishApprovedEvent(ActivatedJob job) {
+        LOGGER.info("Executing publishApprovedEvent for job: {}", job.getKey());
+
+        Map<String, Object> variables = job.getVariablesAsMap();
+
+        camundaClient.newPublishMessageCommand()
+                .messageName("OwnerApplicationApproved")
+                .correlationKey(UUID.randomUUID().toString())
+                .variables(variables)
+                .send()
+                .join();
+    }
 }

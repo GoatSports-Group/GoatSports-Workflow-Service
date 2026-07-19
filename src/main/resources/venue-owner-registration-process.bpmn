@@ -25,7 +25,6 @@
     <bpmn:laneSet id="LaneSet_00vmf0s">
       <bpmn:lane id="Lane_User" name="User">
         <bpmn:flowNodeRef>StartEvent_SubmitClicked</bpmn:flowNodeRef>
-        <bpmn:flowNodeRef>Task_UserUpload</bpmn:flowNodeRef>
       </bpmn:lane>
       <bpmn:lane id="Lane_System01" name="System">
         <bpmn:flowNodeRef>Task_CreateOwnerApplication</bpmn:flowNodeRef>
@@ -44,6 +43,7 @@
         <bpmn:flowNodeRef>EndEvent_CreateAppFailed</bpmn:flowNodeRef>
         <bpmn:flowNodeRef>EndEvent_GetPresignedFailed</bpmn:flowNodeRef>
         <bpmn:flowNodeRef>EndEvent_Approved</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_UserUpload</bpmn:flowNodeRef>
       </bpmn:lane>
       <bpmn:lane id="Lane_Admin" name="Admin">
         <bpmn:flowNodeRef>Gateway_Approved</bpmn:flowNodeRef>
@@ -82,13 +82,6 @@
       <bpmn:incoming>Flow_1bgu5wi</bpmn:incoming>
       <bpmn:outgoing>Flow_1emausm</bpmn:outgoing>
     </bpmn:parallelGateway>
-    <bpmn:userTask id="Task_UserUpload" name="Upload documents to R2&#10;(Angular)">
-      <bpmn:extensionElements>
-        <zeebe:userTask />
-      </bpmn:extensionElements>
-      <bpmn:incoming>Flow_1emausm</bpmn:incoming>
-      <bpmn:outgoing>Flow_0n9prfu</bpmn:outgoing>
-    </bpmn:userTask>
     <bpmn:serviceTask id="Task_CreateDocuments" name="Create documents&#10;(venue-service)">
       <bpmn:extensionElements>
         <zeebe:taskDefinition type="createDocuments" />
@@ -215,6 +208,13 @@
     </bpmn:endEvent>
     <bpmn:sequenceFlow id="Flow_1lremef" sourceRef="Event_PublishRejected" targetRef="EndEvent_Rejected" />
     <bpmn:sequenceFlow id="Flow_0n9prfu" sourceRef="Task_UserUpload" targetRef="Task_CreateDocuments" />
+    <bpmn:userTask id="Task_UserUpload" name="Upload documents to R2&#10;(Angular)">
+      <bpmn:extensionElements>
+        <zeebe:userTask />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_1emausm</bpmn:incoming>
+      <bpmn:outgoing>Flow_0n9prfu</bpmn:outgoing>
+    </bpmn:userTask>
   </bpmn:process>
   <bpmn:process id="Process_MoveFiles" name="Move Files Process" isExecutable="false">
     <bpmn:startEvent id="Event_MoveFiles" name="Documents created">
@@ -332,10 +332,6 @@
       <bpmndi:BPMNShape id="Gateway_1ynq76r_di" bpmnElement="Gateway_Submit">
         <dc:Bounds x="725" y="653" width="50" height="50" />
       </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="Task_UserUpload_di" bpmnElement="Task_UserUpload">
-        <dc:Bounds x="850" y="410" width="100" height="80" />
-        <bpmndi:BPMNLabel />
-      </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Activity_1a9hux0_di" bpmnElement="Task_CreateDocuments">
         <dc:Bounds x="1050" y="638" width="100" height="80" />
       </bpmndi:BPMNShape>
@@ -406,6 +402,10 @@
       <bpmndi:BPMNShape id="Event_0vj2mmg_di" bpmnElement="EndEvent_Rejected">
         <dc:Bounds x="2142" y="1262" width="36" height="36" />
       </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_UserUpload_di" bpmnElement="Task_UserUpload">
+        <dc:Bounds x="860" y="638" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="BoundaryEvent_GetPresignedFailed_di" bpmnElement="BoundaryEvent_GetPresignedFailed">
         <dc:Bounds x="462" y="752" width="36" height="36" />
       </bpmndi:BPMNShape>
@@ -438,8 +438,7 @@
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Flow_1emausm_di" bpmnElement="Flow_1emausm">
         <di:waypoint x="775" y="678" />
-        <di:waypoint x="900" y="678" />
-        <di:waypoint x="900" y="490" />
+        <di:waypoint x="860" y="678" />
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Flow_GetPresignedFailedToEnd_di" bpmnElement="Flow_GetPresignedFailedToEnd">
         <di:waypoint x="498" y="770" />
@@ -505,10 +504,8 @@
         <di:waypoint x="2160" y="1262" />
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Flow_0n9prfu_di" bpmnElement="Flow_0n9prfu">
-        <di:waypoint x="950" y="450" />
-        <di:waypoint x="1000" y="450" />
-        <di:waypoint x="1000" y="685" />
-        <di:waypoint x="1050" y="685" />
+        <di:waypoint x="960" y="678" />
+        <di:waypoint x="1050" y="678" />
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNShape id="Participant_04ycnde_di" bpmnElement="Participant_MoveFilesProcess" isHorizontal="true">
         <dc:Bounds x="1175" y="76" width="525" height="250" />

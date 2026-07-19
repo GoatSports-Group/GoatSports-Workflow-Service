@@ -3,6 +3,7 @@ package iuh.fit.workflowservice.infrastructure.worker;
 import io.camunda.client.annotation.JobWorker;
 import io.camunda.client.api.response.ActivatedJob;
 import iuh.fit.workflowservice.application.dto.request.venue.CreateDocumentsRequest;
+import iuh.fit.workflowservice.application.dto.request.venue.ReviewOwnerApplicationRequest;
 import iuh.fit.workflowservice.application.dto.request.venue.SubmitOwnerApplicationRequest;
 import iuh.fit.workflowservice.application.dto.response.base.BaseResponse;
 import iuh.fit.workflowservice.application.dto.response.venue.OwnerApplicationResponse;
@@ -72,5 +73,99 @@ public class VenueJobWorker {
         }
 
         return Map.of("eventType", "SUBMITTED");
+    }
+
+    @JobWorker(type = "rejectApplication")
+    public Map<String, Object> handleRejectApplication(ActivatedJob job) throws ServiceException {
+        LOGGER.info("Executing rejectApplication for job: {}", job.getKey());
+
+        Map<String, Object> variables = job.getVariablesAsMap();
+
+        String id = getOwnerApplicationField(variables, "ownerApplicationId");
+        String rejectReason = getOwnerApplicationField(variables, "rejectReason");
+        String reviewerId = (String) variables.get("reviewerId");
+        if (reviewerId == null) {
+            reviewerId = getOwnerApplicationField(variables, "reviewerId");
+        }
+
+        BaseResponse<OwnerApplicationResponse> response = venueClient.rejectApplication(
+                id,
+                new ReviewOwnerApplicationRequest(reviewerId, rejectReason)
+        );
+
+        if (response.getError() != null || response.getStatusCode() >= 400) {
+            throw new ServiceException(response.getMessage().toString());
+        }
+
+        return Map.of(
+                "eventType", "REJECTED",
+                "ownerApplication", response.getData()
+        );
+    }
+
+    @JobWorker(type = "approveApplication")
+    public Map<String, Object> handleApproveApplication(ActivatedJob job) throws ServiceException {
+        LOGGER.info("Executing approveApplication for job: {}", job.getKey());
+
+        Map<String, Object> variables = job.getVariablesAsMap();
+
+        String id = getOwnerApplicationField(variables, "ownerApplicationId");
+        String reviewerId = (String) variables.get("reviewerId");
+        if (reviewerId == null) {
+            reviewerId = getOwnerApplicationField(variables, "reviewerId");
+        }
+
+        BaseResponse<OwnerApplicationResponse> response = venueClient.approveApplication(
+                id,
+                new ReviewOwnerApplicationRequest(reviewerId, null)
+        );
+
+        if (response.getError() != null || response.getStatusCode() >= 400) {
+            throw new ServiceException(response.getMessage().toString());
+        }
+
+        return Map.of(
+                "eventType", "APPROVED",
+                "ownerApplication", response.getData()
+        );
+    }
+
+    @JobWorker(type = "createVenueOwnerProfile")
+    public Map<String, Object> handleCreateVenueOwnerProfile(ActivatedJob job) throws ServiceException {
+        LOGGER.info("Executing createVenueOwnerProfile for job: {}", job.getKey());
+
+        Map<String, Object> variables = job.getVariablesAsMap();
+        String id = getOwnerApplicationField(variables, "ownerApplicationId");
+
+        BaseResponse<Void> response = venueClient.createVenueOwnerProfile(id);
+
+        if (response.getError() != null || response.getStatusCode() >= 400) {
+            throw new ServiceException(response.getMessage().toString());
+        }
+
+        return Map.of();
+    }
+
+    private String getOwnerApplicationField(Map<String, Object> variables, String fieldName) {
+        Object ownerApp = variables.get("ownerApplication");
+        if (ownerApp == null) {
+            return null;
+        }
+
+        if (ownerApp instanceof Map) {
+            Object val = ((Map<?, ?>) ownerApp).get(fieldName);
+            return val != null ? val.toString() : null;
+        } else if (ownerApp instanceof OwnerApplicationResponse) {
+            OwnerApplicationResponse response = (OwnerApplicationResponse) ownerApp;
+            if ("ownerApplicationId".equals(fieldName)) {
+                return response.ownerApplicationId() != null ? response.ownerApplicationId().toString() : null;
+            } else if ("userId".equals(fieldName)) {
+                return response.userId() != null ? response.userId().toString() : null;
+            } else if ("rejectReason".equals(fieldName)) {
+                return response.rejectReason();
+            }
+        }
+
+        return null;
     }
 }
