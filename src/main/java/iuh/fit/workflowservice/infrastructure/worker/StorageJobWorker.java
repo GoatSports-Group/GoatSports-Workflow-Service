@@ -43,7 +43,9 @@ public class StorageJobWorker {
             }
         }
 
-        BaseResponse<List<PresignedUrlResponse>> response = storageClient.getPresignedUrl(requests);
+        String userId = (String) variables.get("userId");
+
+        BaseResponse<List<PresignedUrlResponse>> response = storageClient.getPresignedUrl(requests, userId);
 
         if(response.getError() != null || response.getStatusCode() >= 400) {
             throw new ServiceException(response.getMessage().toString());

@@ -8,6 +8,7 @@ import io.camunda.client.api.search.response.UserTask;
 import io.camunda.client.api.search.response.Variable;
 import iuh.fit.workflowservice.application.exception.ServiceException;
 import iuh.fit.workflowservice.application.port.security.CurrentUserProvider;
+import iuh.fit.workflowservice.application.port.util.ObjectMapperPort;
 import iuh.fit.workflowservice.application.util.BaseUtil;
 import iuh.fit.workflowservice.presentation.request.CompleteReviewRequest;
 import iuh.fit.workflowservice.presentation.request.CompleteTaskRequest;
@@ -31,6 +32,7 @@ public class WorkflowController {
 
     private final CamundaClient camundaClient;
     private final CurrentUserProvider currentUserProvider;
+    private final ObjectMapperPort objectMapper;
 
     private final String BPMN_ID = "Process_VenueOwnerRegistration";
 
@@ -73,7 +75,7 @@ public class WorkflowController {
 
         if (searchResponse.items() != null) {
             for (Variable variable : searchResponse.items()) {
-                variablesMap.put(variable.getName(), BaseUtil.convert(variable.getValue()));
+                variablesMap.put(variable.getName(), objectMapper.read(variable.getValue()));
             }
         }
 
@@ -159,7 +161,7 @@ public class WorkflowController {
             if (variablesResponse.items() != null) {
                 for (Variable variable : variablesResponse.items()) {
                     if ("ownerApplication".equals(variable.getName())) {
-                        ownerAppObj = BaseUtil.convert(variable.getValue());
+                        ownerAppObj = objectMapper.read(variable.getValue());
                         if (variable.getValue() != null && variable.getValue().contains(ownerApplicationId)) {
                             matches = true;
                         }

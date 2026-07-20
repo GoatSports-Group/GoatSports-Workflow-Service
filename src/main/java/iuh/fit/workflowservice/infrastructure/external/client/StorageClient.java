@@ -7,6 +7,7 @@ import iuh.fit.workflowservice.application.dto.response.storage.PresignedUrlResp
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 
 import java.util.List;
 
@@ -17,7 +18,10 @@ import java.util.List;
 )
 public interface StorageClient {
     @PostMapping("/presigned-url")
-    BaseResponse<List<PresignedUrlResponse>> getPresignedUrl(@RequestBody List<PresignedUrlRequest> requests);
+    BaseResponse<List<PresignedUrlResponse>> getPresignedUrl(
+            @RequestBody List<PresignedUrlRequest> requests,
+            @RequestParam String userId
+    );
 
     @PostMapping("/move")
     BaseResponse<Void> moveFile(@RequestBody MoveFileRequest requests);

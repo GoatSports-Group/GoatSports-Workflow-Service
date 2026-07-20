@@ -1,6 +1,7 @@
 package iuh.fit.workflowservice.infrastructure.external.kafka;
 
 import io.camunda.client.CamundaClient;
+import iuh.fit.workflowservice.infrastructure.external.kafka.event.FileMoveCompletedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.annotation.BackOff;
@@ -24,20 +25,20 @@ public class WorkflowConsumer {
             topics = "${spring.kafka.topic.file-move-completed}",
             groupId = "${spring.kafka.consumer.group-id}"
     )
-    public void consumeFileMoveCompletedEvent(Long processInstanceKey) {
-        log.info("Workflow received completion notification for process: {}", processInstanceKey);
+    public void consumeFileMoveCompletedEvent(FileMoveCompletedEvent event) {
+        log.info("Workflow received completion notification for process: {}", event.getProcessInstanceKey());
 
         camundaClient.newPublishMessageCommand()
                 .messageName("WaitingFromConsumer")
-                .correlationKey(processInstanceKey.toString())
+                .correlationKey(event.getProcessInstanceKey().toString())
                 .send()
                 .join();
 
-        log.info("Successfully correlated message for key: {}", processInstanceKey);
+        log.info("Successfully correlated message for key: {}", event.getProcessInstanceKey());
     }
 
     @DltHandler
-    public void handleDlt(Long processInstanceKey, @Header(KafkaHeaders.RECEIVED_TOPIC) String topic) {
-        log.error("Event failed all retries and reached DLT topic {}. Payload: {}", topic, processInstanceKey);
+    public void handleDlt(FileMoveCompletedEvent event, @Header(KafkaHeaders.RECEIVED_TOPIC) String topic) {
+        log.error("Event failed all retries and reached DLT topic {}. Payload: {}", topic, event.getProcessInstanceKey());
     }
 }

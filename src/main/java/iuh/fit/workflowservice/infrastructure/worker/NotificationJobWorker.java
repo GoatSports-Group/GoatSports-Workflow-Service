@@ -8,6 +8,7 @@ import iuh.fit.workflowservice.application.dto.response.base.BaseResponse;
 import iuh.fit.workflowservice.application.dto.response.notification.NotificationResponse;
 import iuh.fit.workflowservice.application.dto.response.venue.OwnerApplicationResponse;
 import iuh.fit.workflowservice.application.exception.ServiceException;
+import iuh.fit.workflowservice.application.port.util.ObjectMapperPort;
 import iuh.fit.workflowservice.infrastructure.external.client.NotificationClient;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -22,7 +23,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class NotificationJobWorker {
     private static final Logger LOGGER = LoggerFactory.getLogger(NotificationJobWorker.class);
-
+    private final ObjectMapperPort objectMapper;
     private final NotificationClient notificationClient;
 
     @JobWorker(type = "createNotification")
@@ -31,7 +32,7 @@ public class NotificationJobWorker {
 
         Map<String, Object> variables = job.getVariablesAsMap();
 
-        OwnerApplicationResponse ownerApplication = ((OwnerApplicationResponse) variables.get("ownerApplication"));
+        OwnerApplicationResponse ownerApplication = objectMapper.convert(variables.get("ownerApplication"), OwnerApplicationResponse.class);
         String eventType = (String) variables.get("eventType");
 
         OwnerApplicationEvent event = OwnerApplicationEvent.builder()
@@ -63,7 +64,7 @@ public class NotificationJobWorker {
 
         Map<String, Object> variables = job.getVariablesAsMap();
 
-        NotificationResponse notification = ((NotificationResponse) variables.get("notification"));
+        NotificationResponse notification = objectMapper.convert(variables.get("notification"), NotificationResponse.class);
 
         BaseResponse<Void> response = notificationClient.notifyUser(notification);
 

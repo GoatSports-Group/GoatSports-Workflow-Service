@@ -8,6 +8,7 @@ import iuh.fit.workflowservice.application.dto.request.venue.SubmitOwnerApplicat
 import iuh.fit.workflowservice.application.dto.response.base.BaseResponse;
 import iuh.fit.workflowservice.application.dto.response.venue.OwnerApplicationResponse;
 import iuh.fit.workflowservice.application.exception.ServiceException;
+import iuh.fit.workflowservice.application.port.util.ObjectMapperPort;
 import iuh.fit.workflowservice.infrastructure.external.client.VenueClient;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -21,7 +22,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class VenueJobWorker {
     private static final Logger LOGGER = LoggerFactory.getLogger(VenueJobWorker.class);
-
+    private final ObjectMapperPort objectMapper;
     private final VenueClient venueClient;
 
     @JobWorker(type = "createOwnerApplication")
@@ -61,8 +62,10 @@ public class VenueJobWorker {
 
         Map<String, Object> variables = job.getVariablesAsMap();
 
+        OwnerApplicationResponse ownerApplication = objectMapper.convert(variables.get("ownerApplication"), OwnerApplicationResponse.class);
+
         CreateDocumentsRequest request = new CreateDocumentsRequest(
-                ((OwnerApplicationResponse) variables.get("ownerApplication")).ownerApplicationId().toString(),
+                ownerApplication.ownerApplicationId().toString(),
                 (List<String>) variables.get("documentKeys")
         );
 

@@ -216,7 +216,7 @@
       <bpmn:outgoing>Flow_0n9prfu</bpmn:outgoing>
     </bpmn:userTask>
   </bpmn:process>
-  <bpmn:process id="Process_MoveFiles" name="Move Files Process" isExecutable="false">
+  <bpmn:process id="Process_MoveFiles" name="Move Files Process" isExecutable="true">
     <bpmn:startEvent id="Event_MoveFiles" name="Documents created">
       <bpmn:outgoing>Flow_0hahnww</bpmn:outgoing>
       <bpmn:messageEventDefinition id="MessageEventDefinition_03g1j29" messageRef="Message_FileMove" />
@@ -240,7 +240,7 @@
       <bpmn:incoming>Flow_1iggkiu</bpmn:incoming>
     </bpmn:endEvent>
   </bpmn:process>
-  <bpmn:process id="Process_Notification" name="Notification Process" isExecutable="false">
+  <bpmn:process id="Process_Notification" name="Notification Process" isExecutable="true">
     <bpmn:startEvent id="Event_Created" name="CreatedEvent">
       <bpmn:outgoing>Flow_0zh7yv4</bpmn:outgoing>
       <bpmn:messageEventDefinition id="MessageEventDefinition_14qi5mc" messageRef="Message_AppCreated" />
@@ -289,7 +289,11 @@
     </bpmn:extensionElements>
   </bpmn:message>
   <bpmn:error id="Error_1a3vfkc" name="Move File Failed" errorCode="MOVE_FILE_FAILED" />
-  <bpmn:message id="Message_1hjl91e" name="WaitingFromConsumer" />
+  <bpmn:message id="Message_1hjl91e" name="WaitingFromConsumer">
+    <bpmn:extensionElements>
+      <zeebe:subscription correlationKey="=processInstanceKey" />
+    </bpmn:extensionElements>
+  </bpmn:message>
   <bpmndi:BPMNDiagram id="BPMNDiagram_1">
     <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Collaboration_VenueOwnerRegistrationProcess">
       <bpmndi:BPMNShape id="Participant_0h0bom9_di" bpmnElement="Participant_VenueOwnerRegistrationProcess" isHorizontal="true">
