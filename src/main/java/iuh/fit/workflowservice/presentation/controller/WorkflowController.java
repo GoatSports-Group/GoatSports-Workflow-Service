@@ -6,6 +6,7 @@ import io.camunda.client.api.search.enums.UserTaskState;
 import io.camunda.client.api.search.response.SearchResponse;
 import io.camunda.client.api.search.response.UserTask;
 import io.camunda.client.api.search.response.Variable;
+import iuh.fit.shared.annotation.AuditLog;
 import iuh.fit.workflowservice.application.exception.ServiceException;
 import iuh.fit.workflowservice.application.port.security.CurrentUserProvider;
 import iuh.fit.workflowservice.application.port.util.ObjectMapperPort;
@@ -37,7 +38,8 @@ public class WorkflowController {
     private final String BPMN_ID = "Process_VenueOwnerRegistration";
 
     @PostMapping("/start")
-    public ResponseEntity<ProcessInstanceResponse> startProcess(
+    @AuditLog(action = "CREATE_APPLICATION", description = "Thực hiện quy trình tạo đơn đăng ký chủ sân")
+    public ResponseEntity<ProcessInstanceResponse> startVenueOwnerApplicationRegistrationProcess(
             @Valid @RequestBody StartProcessRequest request
     ) throws ServiceException
     {
