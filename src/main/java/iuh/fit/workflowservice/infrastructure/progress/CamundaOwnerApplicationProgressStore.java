@@ -2,7 +2,6 @@ package iuh.fit.workflowservice.infrastructure.progress;
 
 import io.camunda.client.CamundaClient;
 import io.camunda.client.api.search.enums.UserTaskState;
-import io.camunda.client.api.search.filter.ProcessInstanceFilterBase;
 import io.camunda.client.api.search.response.ProcessInstance;
 import io.camunda.client.api.search.response.SearchResponse;
 import io.camunda.client.api.search.response.UserTask;
@@ -12,6 +11,7 @@ import iuh.fit.workflowservice.application.dto.progress.OwnerApplicationProgress
 import iuh.fit.workflowservice.application.port.progress.OwnerApplicationProgressStore;
 import iuh.fit.workflowservice.application.port.util.ObjectMapperPort;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.util.Collection;
@@ -19,11 +19,12 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
-import java.util.function.Consumer;
 
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class CamundaOwnerApplicationProgressStore implements OwnerApplicationProgressStore {
     private static final String PROCESS_ID = "Process_VenueOwnerRegistration";
     private static final String APPLICATION_ID = "ownerApplicationId";
@@ -35,6 +36,7 @@ public class CamundaOwnerApplicationProgressStore implements OwnerApplicationPro
     private static final String ADMIN_REVIEW_TASK = "Task_AdminReview";
     private static final List<String> PROGRESS_VARIABLES = List.of(
             APPLICATION_ID,
+            USER_ID,
             RECEIVED_AT,
             VIEWED_AT
     );
@@ -51,24 +53,40 @@ public class CamundaOwnerApplicationProgressStore implements OwnerApplicationPro
             return List.of();
         }
 
-        List<Consumer<ProcessInstanceFilterBase>> alternatives = ownerApplicationIds.stream()
-                .<Consumer<ProcessInstanceFilterBase>>map(applicationId -> filter -> filter
-                        .processDefinitionId(PROCESS_ID)
-                        .variables(Map.of(
-                                APPLICATION_ID, applicationId.toString(),
-                                USER_ID, ownerId.toString()
-                        )))
+        Set<UUID> requestedIds = Set.copyOf(ownerApplicationIds);
+        List<String> serializedApplicationIds = requestedIds.stream()
+                .map(applicationId -> "\"" + applicationId + "\"")
                 .toList();
 
+        SearchResponse<Variable> applicationIdVariables = camundaClient.newVariableSearchRequest()
+                .filter(filter -> filter
+                        .name(APPLICATION_ID)
+                        .value(property -> property.in(serializedApplicationIds)))
+                .send()
+                .join();
+
+        List<Long> candidateProcessKeys = applicationIdVariables.items().stream()
+                .map(Variable::getProcessInstanceKey)
+                .distinct()
+                .toList();
+        if (candidateProcessKeys.isEmpty()) {
+            log.debug("No Camunda process found for {} requested owner applications", requestedIds.size());
+            return List.of();
+        }
+
         SearchResponse<ProcessInstance> processes = camundaClient.newProcessInstanceSearchRequest()
-                .filter(filter -> filter.orFilters(alternatives))
+                .filter(filter -> filter
+                        .processDefinitionId(PROCESS_ID)
+                        .processInstanceKey(property -> property.in(candidateProcessKeys)))
                 .send()
                 .join();
 
         List<Long> processKeys = processes.items().stream()
                 .map(ProcessInstance::getProcessInstanceKey)
+                .distinct()
                 .toList();
         if (processKeys.isEmpty()) {
+            log.debug("No owner registration process found for {} candidate processes", candidateProcessKeys.size());
             return List.of();
         }
 
@@ -88,10 +106,17 @@ public class CamundaOwnerApplicationProgressStore implements OwnerApplicationPro
             }
         }
 
-        return progressByProcess.values().stream()
-                .map(ProgressAccumulator::toProgress)
+        List<OwnerApplicationProgress> result = progressByProcess.values().stream()
+                .map(progress -> progress.toProgress(requestedIds, ownerId))
                 .flatMap(Optional::stream)
                 .toList();
+        log.debug(
+                "Loaded owner application progress: requested={}, matchedProcesses={}, authorized={}",
+                requestedIds.size(),
+                processKeys.size(),
+                result.size()
+        );
+        return result;
     }
 
     @Override
@@ -203,20 +228,28 @@ public class CamundaOwnerApplicationProgressStore implements OwnerApplicationPro
 
     private static final class ProgressAccumulator {
         private UUID ownerApplicationId;
+        private UUID ownerId;
         private String receivedAt;
         private String viewedAt;
 
         private void accept(String name, String value) {
             switch (name) {
                 case APPLICATION_ID -> ownerApplicationId = value == null ? null : UUID.fromString(value);
+                case USER_ID -> ownerId = value == null ? null : UUID.fromString(value);
                 case RECEIVED_AT -> receivedAt = value;
                 case VIEWED_AT -> viewedAt = value;
                 default -> { }
             }
         }
 
-        private Optional<OwnerApplicationProgress> toProgress() {
-            if (ownerApplicationId == null) {
+        private Optional<OwnerApplicationProgress> toProgress(
+                Set<UUID> requestedIds,
+                UUID currentOwnerId
+        ) {
+            if (ownerApplicationId == null
+                    || ownerId == null
+                    || !requestedIds.contains(ownerApplicationId)
+                    || !currentOwnerId.equals(ownerId)) {
                 return Optional.empty();
             }
             return Optional.of(new OwnerApplicationProgress(ownerApplicationId, receivedAt, viewedAt));
