@@ -83,18 +83,43 @@ public class NotificationJobWorker {
                     variables.get("ownerApplication"),
                     OwnerApplicationResponse.class
             );
-            long processInstanceKey = ((Number) variables.get("mainProcessInstanceKey")).longValue();
+            long processInstanceKey = resolveMainProcessInstanceKey(variables, ownerApplication);
             String receivedAt = notification.createdAt() == null
                     ? LocalDateTime.now().toString()
                     : notification.createdAt().toString();
 
-            progressStore.markReceived(processInstanceKey, receivedAt);
-            progressPublisher.publish(OwnerApplicationProgressChangedEvent.changed(
-                    ownerApplication.userId(),
-                    ownerApplication.ownerApplicationId()
-            ));
+            boolean changed = progressStore.markReceivedIfAbsent(processInstanceKey, receivedAt);
+            if (changed) {
+                progressPublisher.publish(OwnerApplicationProgressChangedEvent.changed(
+                        ownerApplication.userId(),
+                        ownerApplication.ownerApplicationId()
+                ));
+            }
         }
 
         return Map.of();
+    }
+
+    private long resolveMainProcessInstanceKey(
+            Map<String, Object> variables,
+            OwnerApplicationResponse ownerApplication
+    ) throws ServiceException {
+        Object rawProcessInstanceKey = variables.get("mainProcessInstanceKey");
+        if (rawProcessInstanceKey instanceof Number number) {
+            return number.longValue();
+        }
+        if (rawProcessInstanceKey != null) {
+            try {
+                return Long.parseLong(rawProcessInstanceKey.toString());
+            } catch (NumberFormatException exception) {
+                LOGGER.warn("Invalid mainProcessInstanceKey: {}", rawProcessInstanceKey);
+            }
+        }
+
+        return progressStore.findByOwnerApplicationId(ownerApplication.ownerApplicationId())
+                .map(process -> process.processInstanceKey())
+                .orElseThrow(() -> new ServiceException(
+                        "Không tìm thấy quy trình của đơn đăng ký để ghi nhận thời gian tiếp nhận."
+                ));
     }
 }

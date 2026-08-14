@@ -23,5 +23,5 @@ public interface OwnerApplicationProgressStore {
             UUID viewerId
     );
 
-    void markReceived(long processInstanceKey, String receivedAt);
+    boolean markReceivedIfAbsent(long processInstanceKey, String receivedAt);
 }

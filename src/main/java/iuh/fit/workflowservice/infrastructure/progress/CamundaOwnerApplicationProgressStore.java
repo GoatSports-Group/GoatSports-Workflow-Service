@@ -96,11 +96,10 @@ public class CamundaOwnerApplicationProgressStore implements OwnerApplicationPro
 
     @Override
     public Optional<OwnerApplicationProcess> findByOwnerApplicationId(UUID ownerApplicationId) {
-        SearchResponse<UserTask> response = camundaClient.newUserTaskSearchRequest()
+        SearchResponse<ProcessInstance> response = camundaClient.newProcessInstanceSearchRequest()
                 .filter(filter -> filter
-                        .elementId(ADMIN_REVIEW_TASK)
-                        .state(UserTaskState.CREATED)
-                        .processInstanceVariables(Map.of(APPLICATION_ID, ownerApplicationId.toString())))
+                        .processDefinitionId(PROCESS_ID)
+                        .variables(Map.of(APPLICATION_ID, ownerApplicationId.toString())))
                 .send()
                 .join();
 
@@ -134,11 +133,16 @@ public class CamundaOwnerApplicationProgressStore implements OwnerApplicationPro
     }
 
     @Override
-    public void markReceived(long processInstanceKey, String receivedAt) {
+    public boolean markReceivedIfAbsent(long processInstanceKey, String receivedAt) {
+        if (findVariable(processInstanceKey, RECEIVED_AT).isPresent()) {
+            return false;
+        }
+
         camundaClient.newSetVariablesCommand(processInstanceKey)
                 .variable(RECEIVED_AT, receivedAt)
                 .send()
                 .join();
+        return true;
     }
 
     private Optional<OwnerApplicationProcess> createProcess(long processInstanceKey, UUID ownerApplicationId) {
