@@ -1,6 +1,7 @@
 package iuh.fit.workflowservice.infrastructure.external.client;
 
 import iuh.fit.workflowservice.application.dto.event.OwnerApplicationEvent;
+import iuh.fit.workflowservice.application.dto.event.OwnerApplicationProgressChangedEvent;
 import iuh.fit.workflowservice.application.dto.response.base.BaseResponse;
 import iuh.fit.workflowservice.application.dto.response.notification.NotificationResponse;
 import org.springframework.cloud.openfeign.FeignClient;
@@ -18,4 +19,7 @@ public interface NotificationClient {
 
     @PostMapping("/notify")
     BaseResponse<Void> notifyUser(@RequestBody NotificationResponse notification);
+
+    @PostMapping("/owner-application-progress")
+    BaseResponse<Void> publishOwnerApplicationProgress(@RequestBody OwnerApplicationProgressChangedEvent event);
 }

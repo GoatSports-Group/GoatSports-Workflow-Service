@@ -3,11 +3,14 @@ package iuh.fit.workflowservice.infrastructure.worker;
 import io.camunda.client.annotation.JobWorker;
 import io.camunda.client.api.response.ActivatedJob;
 import iuh.fit.workflowservice.application.dto.event.OwnerApplicationEvent;
+import iuh.fit.workflowservice.application.dto.event.OwnerApplicationProgressChangedEvent;
 import iuh.fit.workflowservice.application.dto.event.type.OwnerApplicationEventType;
 import iuh.fit.workflowservice.application.dto.response.base.BaseResponse;
 import iuh.fit.workflowservice.application.dto.response.notification.NotificationResponse;
 import iuh.fit.workflowservice.application.dto.response.venue.OwnerApplicationResponse;
 import iuh.fit.workflowservice.application.exception.ServiceException;
+import iuh.fit.workflowservice.application.port.notification.OwnerApplicationProgressPublisher;
+import iuh.fit.workflowservice.application.port.progress.OwnerApplicationProgressStore;
 import iuh.fit.workflowservice.application.port.util.ObjectMapperPort;
 import iuh.fit.workflowservice.infrastructure.external.client.NotificationClient;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +28,8 @@ public class NotificationJobWorker {
     private static final Logger LOGGER = LoggerFactory.getLogger(NotificationJobWorker.class);
     private final ObjectMapperPort objectMapper;
     private final NotificationClient notificationClient;
+    private final OwnerApplicationProgressStore progressStore;
+    private final OwnerApplicationProgressPublisher progressPublisher;
 
     @JobWorker(type = "createNotification")
     public Map<String, Object> handleCreateNotification(ActivatedJob job) throws ServiceException {
@@ -70,6 +75,24 @@ public class NotificationJobWorker {
 
         if(response.getError() != null || response.getStatusCode() >= 400) {
             throw new ServiceException(response.getMessage().toString());
+        }
+
+        String eventType = (String) variables.get("eventType");
+        if (OwnerApplicationEventType.SUBMITTED.name().equals(eventType)) {
+            OwnerApplicationResponse ownerApplication = objectMapper.convert(
+                    variables.get("ownerApplication"),
+                    OwnerApplicationResponse.class
+            );
+            long processInstanceKey = ((Number) variables.get("mainProcessInstanceKey")).longValue();
+            String receivedAt = notification.createdAt() == null
+                    ? LocalDateTime.now().toString()
+                    : notification.createdAt().toString();
+
+            progressStore.markReceived(processInstanceKey, receivedAt);
+            progressPublisher.publish(OwnerApplicationProgressChangedEvent.changed(
+                    ownerApplication.userId(),
+                    ownerApplication.ownerApplicationId()
+            ));
         }
 
         return Map.of();

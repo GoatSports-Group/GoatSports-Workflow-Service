@@ -53,7 +53,11 @@ public class VenueJobWorker {
             throw new ServiceException(response.getMessage().toString());
         }
 
-        return Map.of("ownerApplication", response.getData());
+        return Map.of(
+                "ownerApplication", response.getData(),
+                "ownerApplicationId", response.getData().ownerApplicationId().toString(),
+                "mainProcessInstanceKey", job.getProcessInstanceKey()
+        );
     }
 
     @JobWorker(type = "createDocuments")
