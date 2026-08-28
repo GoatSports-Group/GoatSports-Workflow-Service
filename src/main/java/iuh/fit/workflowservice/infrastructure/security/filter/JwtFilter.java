@@ -16,7 +16,6 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.stream.Stream;
 
@@ -58,15 +57,15 @@ public class JwtFilter extends OncePerRequestFilter {
             String username = request.getHeader("X-User-Username");
             String email = request.getHeader("X-User-Email");
             String authoritiesRaw = request.getHeader("X-User-Authorities");
+            String rolesRaw = request.getHeader("X-User-Roles");
 
-            List<SimpleGrantedAuthority> authorities = Collections.emptyList();
-            if (hasText(authoritiesRaw)) {
-                authorities = Arrays.stream(authoritiesRaw.split(","))
-                        .map(String::trim)
-                        .filter(s -> !s.isBlank())
-                        .map(SimpleGrantedAuthority::new)
-                        .toList();
-            }
+            List<SimpleGrantedAuthority> authorities = Stream.concat(
+                    split(authoritiesRaw),
+                    split(rolesRaw).map(role -> role.startsWith("ROLE_") ? role : "ROLE_" + role)
+            )
+                    .distinct()
+                    .map(SimpleGrantedAuthority::new)
+                    .toList();
 
             if (hasText(userId) || hasText(email) || hasText(username)) {
                 String principal = hasText(email) ? email : username;
@@ -93,5 +92,11 @@ public class JwtFilter extends OncePerRequestFilter {
 
     private boolean hasText(String value) {
         return value != null && !value.isBlank();
+    }
+
+    private Stream<String> split(String values) {
+        return hasText(values)
+                ? Arrays.stream(values.split(",")).map(String::trim).filter(value -> !value.isBlank())
+                : Stream.empty();
     }
 }
