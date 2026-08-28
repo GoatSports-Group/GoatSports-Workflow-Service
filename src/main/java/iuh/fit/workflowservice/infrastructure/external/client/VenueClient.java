@@ -34,6 +34,4 @@ public interface VenueClient {
             @RequestBody ReviewOwnerApplicationRequest request
     );
 
-    @PostMapping("/owner-applications/{id}/profile")
-    BaseResponse<Void> createVenueOwnerProfile(@PathVariable("id") String id);
 }

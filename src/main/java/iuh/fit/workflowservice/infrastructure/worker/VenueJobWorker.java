@@ -137,22 +137,6 @@ public class VenueJobWorker {
         );
     }
 
-    @JobWorker(type = "createVenueOwnerProfile")
-    public Map<String, Object> handleCreateVenueOwnerProfile(ActivatedJob job) throws ServiceException {
-        LOGGER.info("Executing createVenueOwnerProfile for job: {}", job.getKey());
-
-        Map<String, Object> variables = job.getVariablesAsMap();
-        String id = getOwnerApplicationField(variables, "ownerApplicationId");
-
-        BaseResponse<Void> response = venueClient.createVenueOwnerProfile(id);
-
-        if (response.getError() != null || response.getStatusCode() >= 400) {
-            throw new ServiceException(response.getMessage().toString());
-        }
-
-        return Map.of();
-    }
-
     private String getOwnerApplicationField(Map<String, Object> variables, String fieldName) {
         Object ownerApp = variables.get("ownerApplication");
         if (ownerApp == null) {

@@ -1,9 +1,11 @@
 package iuh.fit.workflowservice.infrastructure.worker;
 
+import io.camunda.client.CamundaClient;
 import io.camunda.client.annotation.JobWorker;
 import io.camunda.client.api.response.ActivatedJob;
+import iuh.fit.workflowservice.application.dto.request.auth.RegisterVenueOwnerRequest;
+import iuh.fit.workflowservice.application.dto.response.auth.RegisteredUserResponse;
 import iuh.fit.workflowservice.application.dto.response.base.BaseResponse;
-import iuh.fit.workflowservice.application.dto.response.venue.OwnerApplicationResponse;
 import iuh.fit.workflowservice.application.exception.ServiceException;
 import iuh.fit.workflowservice.infrastructure.external.client.AuthClient;
 import lombok.RequiredArgsConstructor;
@@ -19,33 +21,43 @@ public class AuthJobWorker {
     private static final Logger LOGGER = LoggerFactory.getLogger(AuthJobWorker.class);
 
     private final AuthClient authClient;
+    private final CamundaClient camundaClient;
 
-    @JobWorker(type = "assignRole")
-    public Map<String, Object> handleAssignRole(ActivatedJob job) throws ServiceException {
-        LOGGER.info("Executing assignRole for job: {}", job.getKey());
+    @JobWorker(type = "registerVenueOwner", autoComplete = false)
+    public void handleRegisterVenueOwner(ActivatedJob job) {
+        LOGGER.info("Executing registerVenueOwner for job: {}", job.getKey());
 
-        Map<String, Object> variables = job.getVariablesAsMap();
-        String userId = getUserId(variables);
+        try {
+            Map<String, Object> variables = job.getVariablesAsMap();
+            RegisterVenueOwnerRequest request = new RegisterVenueOwnerRequest(
+                    (String) variables.get("username"),
+                    (String) variables.get("fullName"),
+                    (String) variables.get("email"),
+                    (String) variables.get("password"),
+                    (String) variables.get("confirmPassword")
+            );
 
-        BaseResponse<Void> response = authClient.assignVenueOwnerRole(userId);
-
-        if (response.getError() != null || response.getStatusCode() >= 400) {
-            throw new ServiceException(response.getMessage().toString());
-        }
-
-        return Map.of();
-    }
-
-    private String getUserId(Map<String, Object> variables) {
-        Object ownerApp = variables.get("ownerApplication");
-
-        return switch (ownerApp) {
-            case Map<?, ?> map -> {
-                Object val = map.get("userId");
-                yield val != null ? val.toString() : null;
+            BaseResponse<RegisteredUserResponse> response = authClient.registerVenueOwner(request);
+            if (response.getError() != null || response.getStatusCode() >= 400 || response.getData() == null) {
+                throw new ServiceException(String.valueOf(response.getMessage()));
             }
-            case OwnerApplicationResponse response -> response.userId() != null ? response.userId().toString() : null;
-            case null, default -> null;
-        };
+
+            camundaClient.newCompleteCommand(job.getKey())
+                    .variable("userId", response.getData().userId().toString())
+                    .send()
+                    .join();
+        } catch (Exception exception) {
+            String message = exception.getMessage() != null
+                    ? exception.getMessage()
+                    : "Register venue owner failed";
+            LOGGER.error("Register venue owner failed for job {}: {}", job.getKey(), message);
+
+            camundaClient.newThrowErrorCommand(job.getKey())
+                    .errorCode("REGISTER_VENUE_OWNER_FAILED")
+                    .errorMessage(message)
+                    .variable("registrationError", message)
+                    .send()
+                    .join();
+        }
     }
 }

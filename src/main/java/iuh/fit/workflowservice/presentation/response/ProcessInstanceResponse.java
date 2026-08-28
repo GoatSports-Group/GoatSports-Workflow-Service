@@ -4,6 +4,7 @@ public record ProcessInstanceResponse(
         long processInstanceKey,
         String bpmnProcessId,
         int version,
-        long processDefinitionKey
+        long processDefinitionKey,
+        String registrationAccessToken
 ) {
 }
