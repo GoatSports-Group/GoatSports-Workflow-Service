@@ -26,6 +26,8 @@
     <bpmn:laneSet id="LaneSet_00vmf0s">
       <bpmn:lane id="Lane_User" name="User">
         <bpmn:flowNodeRef>StartEvent_SubmitClicked</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_VerifyEmail</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_CollectOwnerApplication</bpmn:flowNodeRef>
       </bpmn:lane>
       <bpmn:lane id="Lane_System01" name="System">
         <bpmn:flowNodeRef>Task_RegisterVenueOwner</bpmn:flowNodeRef>
@@ -65,8 +67,22 @@
         <zeebe:taskDefinition type="registerVenueOwner" />
       </bpmn:extensionElements>
       <bpmn:incoming>Flow_StartToFork</bpmn:incoming>
-      <bpmn:outgoing>Flow_RegisterToFork</bpmn:outgoing>
+      <bpmn:outgoing>Flow_RegisterToVerifyEmail</bpmn:outgoing>
     </bpmn:serviceTask>
+    <bpmn:userTask id="Task_VerifyEmail" name="Verify owner email&#10;(Angular)">
+      <bpmn:extensionElements>
+        <zeebe:userTask />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_RegisterToVerifyEmail</bpmn:incoming>
+      <bpmn:outgoing>Flow_VerifyEmailToCollectApplication</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:userTask id="Task_CollectOwnerApplication" name="Complete venue information&#10;(Angular)">
+      <bpmn:extensionElements>
+        <zeebe:userTask />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_VerifyEmailToCollectApplication</bpmn:incoming>
+      <bpmn:outgoing>Flow_RegisterToFork</bpmn:outgoing>
+    </bpmn:userTask>
     <bpmn:serviceTask id="Task_GetPresignedURLs" name="Get presigned URLs&#10;(storage-service)">
       <bpmn:extensionElements>
         <zeebe:taskDefinition type="getPresignedURLs" />
@@ -91,7 +107,9 @@
       <bpmn:errorEventDefinition id="ErrorEventDefinition_GetPresigned" errorRef="Error_GetPresigned" />
     </bpmn:boundaryEvent>
     <bpmn:sequenceFlow id="Flow_StartToFork" sourceRef="StartEvent_SubmitClicked" targetRef="Task_RegisterVenueOwner" />
-    <bpmn:sequenceFlow id="Flow_RegisterToFork" sourceRef="Task_RegisterVenueOwner" targetRef="Fork_Submit" />
+    <bpmn:sequenceFlow id="Flow_RegisterToVerifyEmail" sourceRef="Task_RegisterVenueOwner" targetRef="Task_VerifyEmail" />
+    <bpmn:sequenceFlow id="Flow_VerifyEmailToCollectApplication" sourceRef="Task_VerifyEmail" targetRef="Task_CollectOwnerApplication" />
+    <bpmn:sequenceFlow id="Flow_RegisterToFork" sourceRef="Task_CollectOwnerApplication" targetRef="Fork_Submit" />
     <bpmn:sequenceFlow id="Flow_RegisterVenueOwnerFailedToEnd" sourceRef="BoundaryEvent_RegisterVenueOwnerFailed" targetRef="EndEvent_RegisterVenueOwnerFailed" />
     <bpmn:sequenceFlow id="Flow_ForkToSaveApp" sourceRef="Fork_Submit" targetRef="Task_CreateOwnerApplication" />
     <bpmn:sequenceFlow id="Flow_ForkToGetPresigned" sourceRef="Fork_Submit" targetRef="Task_GetPresignedURLs" />
@@ -329,6 +347,14 @@
         <dc:Bounds x="190" y="560" width="100" height="80" />
         <bpmndi:BPMNLabel />
       </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_VerifyEmail_di" bpmnElement="Task_VerifyEmail">
+        <dc:Bounds x="320" y="410" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_CollectOwnerApplication_di" bpmnElement="Task_CollectOwnerApplication">
+        <dc:Bounds x="460" y="410" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Task_GetPresigned_di" bpmnElement="Task_GetPresignedURLs">
         <dc:Bounds x="380" y="690" width="100" height="80" />
         <bpmndi:BPMNLabel />
@@ -416,14 +442,14 @@
       <bpmndi:BPMNShape id="Fork_Submit_di" bpmnElement="Fork_Submit" isMarkerVisible="true">
         <dc:Bounds x="305" y="645" width="50" height="50" />
       </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="BoundaryEvent_GetPresignedFailed_di" bpmnElement="BoundaryEvent_GetPresignedFailed">
-        <dc:Bounds x="462" y="752" width="36" height="36" />
+      <bpmndi:BPMNShape id="BoundaryEvent_RegisterVenueOwnerFailed_di" bpmnElement="BoundaryEvent_RegisterVenueOwnerFailed">
+        <dc:Bounds x="272" y="622" width="36" height="36" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="BoundaryEvent_CreateAppFailed_di" bpmnElement="BoundaryEvent_CreateAppFailed">
         <dc:Bounds x="492" y="622" width="36" height="36" />
       </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="BoundaryEvent_RegisterVenueOwnerFailed_di" bpmnElement="BoundaryEvent_RegisterVenueOwnerFailed">
-        <dc:Bounds x="272" y="622" width="36" height="36" />
+      <bpmndi:BPMNShape id="BoundaryEvent_GetPresignedFailed_di" bpmnElement="BoundaryEvent_GetPresignedFailed">
+        <dc:Bounds x="462" y="752" width="36" height="36" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNEdge id="Flow_StartToFork_di" bpmnElement="Flow_StartToFork">
         <di:waypoint x="260" y="468" />
@@ -431,9 +457,19 @@
         <di:waypoint x="240" y="520" />
         <di:waypoint x="240" y="560" />
       </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="Flow_RegisterToFork_di" bpmnElement="Flow_RegisterToFork">
+      <bpmndi:BPMNEdge id="Flow_RegisterToVerifyEmail_di" bpmnElement="Flow_RegisterToVerifyEmail">
         <di:waypoint x="290" y="600" />
-        <di:waypoint x="330" y="600" />
+        <di:waypoint x="370" y="600" />
+        <di:waypoint x="370" y="490" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_VerifyEmailToCollectApplication_di" bpmnElement="Flow_VerifyEmailToCollectApplication">
+        <di:waypoint x="420" y="450" />
+        <di:waypoint x="460" y="450" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_RegisterToFork_di" bpmnElement="Flow_RegisterToFork">
+        <di:waypoint x="510" y="490" />
+        <di:waypoint x="510" y="520" />
+        <di:waypoint x="330" y="520" />
         <di:waypoint x="330" y="645" />
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Flow_RegisterVenueOwnerFailedToEnd_di" bpmnElement="Flow_RegisterVenueOwnerFailedToEnd">
