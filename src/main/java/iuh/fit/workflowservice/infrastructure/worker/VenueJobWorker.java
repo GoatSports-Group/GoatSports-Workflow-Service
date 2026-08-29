@@ -7,7 +7,6 @@ import iuh.fit.workflowservice.application.dto.request.venue.ReviewOwnerApplicat
 import iuh.fit.workflowservice.application.dto.request.venue.SubmitOwnerApplicationRequest;
 import iuh.fit.workflowservice.application.dto.response.base.BaseResponse;
 import iuh.fit.workflowservice.application.dto.response.venue.OwnerApplicationResponse;
-import iuh.fit.workflowservice.application.exception.ServiceException;
 import iuh.fit.workflowservice.application.port.util.ObjectMapperPort;
 import iuh.fit.workflowservice.infrastructure.external.client.VenueClient;
 import lombok.RequiredArgsConstructor;
@@ -24,13 +23,13 @@ public class VenueJobWorker {
     private static final Logger LOGGER = LoggerFactory.getLogger(VenueJobWorker.class);
     private final ObjectMapperPort objectMapper;
     private final VenueClient venueClient;
+    private final WorkflowWorkerErrorHandler errorHandler;
 
     @JobWorker(type = "createOwnerApplication")
-    public Map<String, Object> handleCreateOwnerApplication(ActivatedJob job) throws ServiceException {
+    public Map<String, Object> handleCreateOwnerApplication(ActivatedJob job) {
         LOGGER.info("Executing createOwnerApplication for job: {}", job.getKey());
 
         Map<String, Object> variables = job.getVariablesAsMap();
-
         SubmitOwnerApplicationRequest request = new SubmitOwnerApplicationRequest(
             (String) variables.get("userId"),
             (String) variables.get("fullName"),
@@ -47,10 +46,16 @@ public class VenueJobWorker {
             (String) variables.get("city")
         );
 
-        BaseResponse<OwnerApplicationResponse> response = venueClient.submitApplication(request);
+        BaseResponse<OwnerApplicationResponse> response = errorHandler.execute(
+                job, "VENUE_SERVICE", "CREATE_APP_FAILED",
+                () -> venueClient.submitApplication(request)
+        );
 
-        if(response.getError() != null || response.getStatusCode() >= 400) {
-            throw new ServiceException(response.getMessage().toString());
+        if (response.getData() == null || response.getData().ownerApplicationId() == null) {
+            throw errorHandler.fromException(
+                    job, "VENUE_SERVICE", "CREATE_APP_FAILED",
+                    new IllegalStateException("Venue Service response is missing ownerApplicationId")
+            );
         }
 
         return Map.of(
@@ -61,7 +66,7 @@ public class VenueJobWorker {
     }
 
     @JobWorker(type = "createDocuments")
-    public Map<String, Object> handleCreateDocuments(ActivatedJob job) throws ServiceException {
+    public Map<String, Object> handleCreateDocuments(ActivatedJob job) {
         LOGGER.info("Executing createDocuments for job: {}", job.getKey());
 
         Map<String, Object> variables = job.getVariablesAsMap();
@@ -73,17 +78,17 @@ public class VenueJobWorker {
                 (List<String>) variables.get("documentKeys")
         );
 
-        BaseResponse<Void> response = venueClient.createDocuments(request);
+        errorHandler.execute(job, "VENUE_SERVICE", "CREATE_DOCUMENTS_FAILED",
+                () -> venueClient.createDocuments(request));
 
-        if(response.getError() != null || response.getStatusCode() >= 400) {
-            throw new ServiceException(response.getMessage().toString());
-        }
-
-        return Map.of("eventType", "SUBMITTED");
+        return Map.of(
+                "eventType", "SUBMITTED",
+                "workflowStatus", "SUBMITTED"
+        );
     }
 
     @JobWorker(type = "rejectApplication")
-    public Map<String, Object> handleRejectApplication(ActivatedJob job) throws ServiceException {
+    public Map<String, Object> handleRejectApplication(ActivatedJob job) {
         LOGGER.info("Executing rejectApplication for job: {}", job.getKey());
 
         Map<String, Object> variables = job.getVariablesAsMap();
@@ -95,14 +100,13 @@ public class VenueJobWorker {
             reviewerId = getOwnerApplicationField(variables, "reviewerId");
         }
 
-        BaseResponse<OwnerApplicationResponse> response = venueClient.rejectApplication(
-                id,
-                new ReviewOwnerApplicationRequest(reviewerId, rejectReason)
+        String finalReviewerId = reviewerId;
+        BaseResponse<OwnerApplicationResponse> response = errorHandler.execute(
+                job, "VENUE_SERVICE", "REJECT_APP_FAILED",
+                () -> venueClient.rejectApplication(
+                        id, new ReviewOwnerApplicationRequest(finalReviewerId, rejectReason)
+                )
         );
-
-        if (response.getError() != null || response.getStatusCode() >= 400) {
-            throw new ServiceException(response.getMessage().toString());
-        }
 
         return Map.of(
                 "eventType", "REJECTED",
@@ -111,7 +115,7 @@ public class VenueJobWorker {
     }
 
     @JobWorker(type = "approveApplication")
-    public Map<String, Object> handleApproveApplication(ActivatedJob job) throws ServiceException {
+    public Map<String, Object> handleApproveApplication(ActivatedJob job) {
         LOGGER.info("Executing approveApplication for job: {}", job.getKey());
 
         Map<String, Object> variables = job.getVariablesAsMap();
@@ -122,14 +126,13 @@ public class VenueJobWorker {
             reviewerId = getOwnerApplicationField(variables, "reviewerId");
         }
 
-        BaseResponse<OwnerApplicationResponse> response = venueClient.approveApplication(
-                id,
-                new ReviewOwnerApplicationRequest(reviewerId, null)
+        String finalReviewerId = reviewerId;
+        BaseResponse<OwnerApplicationResponse> response = errorHandler.execute(
+                job, "VENUE_SERVICE", "APPROVE_APP_FAILED",
+                () -> venueClient.approveApplication(
+                        id, new ReviewOwnerApplicationRequest(finalReviewerId, null)
+                )
         );
-
-        if (response.getError() != null || response.getStatusCode() >= 400) {
-            throw new ServiceException(response.getMessage().toString());
-        }
 
         return Map.of(
                 "eventType", "APPROVED",

@@ -2,6 +2,7 @@
 <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:modeler="http://camunda.org/schema/modeler/1.0" id="Definitions_0wmo419" targetNamespace="http://bpmn.io/schema/bpmn" exporter="Camunda Modeler" exporterVersion="5.48.0" modeler:executionPlatform="Camunda Cloud" modeler:executionPlatformVersion="8.9.0">
   <bpmn:error id="Error_CreateApp" name="Create Application Failed" errorCode="CREATE_APP_FAILED" />
   <bpmn:error id="Error_GetPresigned" name="Get Presigned Failed" errorCode="GET_PRESIGNED_FAILED" />
+  <bpmn:error id="Error_CreateDocuments" name="Create Documents Failed" errorCode="CREATE_DOCUMENTS_FAILED" />
   <bpmn:message id="Message_AppCreated" name="OwnerApplicationCreated">
     <bpmn:extensionElements>
       <zeebe:subscription correlationKey="=ownerApplicationId" />
@@ -29,6 +30,8 @@
       <bpmn:lane id="Lane_System01" name="System">
         <bpmn:flowNodeRef>Gateway_Submit</bpmn:flowNodeRef>
         <bpmn:flowNodeRef>Task_CreateDocuments</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>BoundaryEvent_CreateDocumentsFailed</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>EndEvent_CreateDocumentsFailed</bpmn:flowNodeRef>
         <bpmn:flowNodeRef>Task_UpdateApprovedStatus</bpmn:flowNodeRef>
         <bpmn:flowNodeRef>Event_PublishApproved</bpmn:flowNodeRef>
         <bpmn:flowNodeRef>Event_PublishMoveFile</bpmn:flowNodeRef>
@@ -68,6 +71,14 @@
       <bpmn:incoming>Flow_0n9prfu</bpmn:incoming>
       <bpmn:outgoing>Flow_06q6rha</bpmn:outgoing>
     </bpmn:serviceTask>
+    <bpmn:boundaryEvent id="BoundaryEvent_CreateDocumentsFailed" attachedToRef="Task_CreateDocuments">
+      <bpmn:outgoing>Flow_CreateDocumentsFailedToEnd</bpmn:outgoing>
+      <bpmn:errorEventDefinition id="ErrorEventDefinition_CreateDocuments" errorRef="Error_CreateDocuments" />
+    </bpmn:boundaryEvent>
+    <bpmn:endEvent id="EndEvent_CreateDocumentsFailed" name="Create documents failed">
+      <bpmn:incoming>Flow_CreateDocumentsFailedToEnd</bpmn:incoming>
+      <bpmn:terminateEventDefinition id="TerminateEventDefinition_CreateDocuments" />
+    </bpmn:endEvent>
     <bpmn:sequenceFlow id="Flow_StartToFork" sourceRef="StartEvent_SubmitClicked" targetRef="Fork_Submit" />
     <bpmn:sequenceFlow id="Flow_ForkToSaveApp" sourceRef="Fork_Submit" targetRef="Task_CreateOwnerApplication" />
     <bpmn:sequenceFlow id="Flow_ForkToGetPresigned" sourceRef="Fork_Submit" targetRef="Task_GetPresignedURLs" />
@@ -76,6 +87,7 @@
     <bpmn:sequenceFlow id="Flow_1emausm" sourceRef="Gateway_Submit" targetRef="Task_UserUpload" />
     <bpmn:sequenceFlow id="Flow_GetPresignedFailedToEnd" sourceRef="BoundaryEvent_GetPresignedFailed" targetRef="EndEvent_GetPresignedFailed" />
     <bpmn:sequenceFlow id="Flow_06q6rha" sourceRef="Task_CreateDocuments" targetRef="Event_PublishMoveFile" />
+    <bpmn:sequenceFlow id="Flow_CreateDocumentsFailedToEnd" sourceRef="BoundaryEvent_CreateDocumentsFailed" targetRef="EndEvent_CreateDocumentsFailed" />
     <bpmn:sequenceFlow id="Flow_1fbqorl" sourceRef="Event_PublishMoveFile" targetRef="Event_PublishCreated" />
     <bpmn:sequenceFlow id="Flow_0jrb6p1" sourceRef="Task_AdminReview" targetRef="Gateway_Approved" />
     <bpmn:exclusiveGateway id="Gateway_Approved" name="Approved">
@@ -310,6 +322,15 @@
       <bpmndi:BPMNShape id="Activity_1a9hux0_di" bpmnElement="Task_CreateDocuments">
         <dc:Bounds x="1050" y="638" width="100" height="80" />
       </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BoundaryEvent_CreateDocumentsFailed_di" bpmnElement="BoundaryEvent_CreateDocumentsFailed">
+        <dc:Bounds x="1132" y="700" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_CreateDocumentsFailed_di" bpmnElement="EndEvent_CreateDocumentsFailed">
+        <dc:Bounds x="1192" y="742" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1172" y="785" width="76" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Gateway_Approved_di" bpmnElement="Gateway_Approved" isMarkerVisible="true">
         <dc:Bounds x="1685" y="925" width="50" height="50" />
         <bpmndi:BPMNLabel>
@@ -426,6 +447,11 @@
       <bpmndi:BPMNEdge id="Flow_06q6rha_di" bpmnElement="Flow_06q6rha">
         <di:waypoint x="1150" y="678" />
         <di:waypoint x="1242" y="678" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_CreateDocumentsFailedToEnd_di" bpmnElement="Flow_CreateDocumentsFailedToEnd">
+        <di:waypoint x="1150" y="736" />
+        <di:waypoint x="1150" y="760" />
+        <di:waypoint x="1192" y="760" />
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Flow_1fbqorl_di" bpmnElement="Flow_1fbqorl">
         <di:waypoint x="1278" y="678" />

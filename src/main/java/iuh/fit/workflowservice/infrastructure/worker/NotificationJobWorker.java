@@ -30,6 +30,7 @@ public class NotificationJobWorker {
     private final NotificationClient notificationClient;
     private final OwnerApplicationProgressStore progressStore;
     private final OwnerApplicationProgressPublisher progressPublisher;
+    private final WorkflowWorkerErrorHandler errorHandler;
 
     @JobWorker(type = "createNotification")
     public Map<String, Object> handleCreateNotification(ActivatedJob job) throws ServiceException {
@@ -54,10 +55,15 @@ public class NotificationJobWorker {
                 )
                 .build();
 
-        BaseResponse<NotificationResponse> response = notificationClient.createOwnerApplicationNotification(event);
-
-        if(response.getError() != null || response.getStatusCode() >= 400) {
-            throw new ServiceException(response.getMessage().toString());
+        BaseResponse<NotificationResponse> response = errorHandler.execute(
+                job, "NOTIFICATION_SERVICE", "CREATE_NOTIFICATION_FAILED",
+                () -> notificationClient.createOwnerApplicationNotification(event)
+        );
+        if (response.getData() == null) {
+            throw errorHandler.fromException(
+                    job, "NOTIFICATION_SERVICE", "CREATE_NOTIFICATION_FAILED",
+                    new IllegalStateException("Notification Service response is missing notification data")
+            );
         }
 
         return Map.of("notification", response.getData());
@@ -71,11 +77,8 @@ public class NotificationJobWorker {
 
         NotificationResponse notification = objectMapper.convert(variables.get("notification"), NotificationResponse.class);
 
-        BaseResponse<Void> response = notificationClient.notifyUser(notification);
-
-        if(response.getError() != null || response.getStatusCode() >= 400) {
-            throw new ServiceException(response.getMessage().toString());
-        }
+        errorHandler.execute(job, "NOTIFICATION_SERVICE", "NOTIFY_USER_FAILED",
+                () -> notificationClient.notifyUser(notification));
 
         String eventType = (String) variables.get("eventType");
         if (OwnerApplicationEventType.SUBMITTED.name().equals(eventType)) {

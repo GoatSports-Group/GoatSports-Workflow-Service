@@ -3,6 +3,7 @@ package iuh.fit.workflowservice.presentation.controller;
 import io.camunda.client.CamundaClient;
 import io.camunda.client.api.response.ProcessInstanceEvent;
 import io.camunda.client.api.search.enums.UserTaskState;
+import io.camunda.client.api.search.response.ProcessInstance;
 import io.camunda.client.api.search.response.SearchResponse;
 import io.camunda.client.api.search.response.UserTask;
 import io.camunda.client.api.search.response.Variable;
@@ -30,6 +31,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/v1/workflows")
@@ -38,6 +40,8 @@ import java.util.Map;
 public class WorkflowController {
     private static final String OWNER_APPLICATION_PROCESS_ID = "Process_VenueOwnerRegistration";
     private static final String USER_UPLOAD_TASK_ID = "Task_UserUpload";
+    private static final String INSTANCE_STATE = "workflowInstanceState";
+    private static final String INSTANCE_HAS_INCIDENT = "workflowHasIncident";
 
     private final CamundaClient camundaClient;
     private final CurrentUserProvider currentUserProvider;
@@ -75,6 +79,10 @@ public class WorkflowController {
         findVariables(instanceKey).items().forEach(variable ->
                 variables.put(variable.getName(), objectMapper.read(variable.getValue()))
         );
+        findProcessInstance(instanceKey).ifPresent(process -> {
+            variables.put(INSTANCE_STATE, String.valueOf(process.getState()));
+            variables.put(INSTANCE_HAS_INCIDENT, Boolean.TRUE.equals(process.getHasIncident()));
+        });
         return ResponseEntity.ok(variables);
     }
 
@@ -141,6 +149,16 @@ public class WorkflowController {
     private SearchResponse<Variable> findVariables(long instanceKey) {
         return camundaClient.newVariableSearchRequest()
                 .filter(filter -> filter.scopeKey(instanceKey)).send().join();
+    }
+
+    private Optional<ProcessInstance> findProcessInstance(long instanceKey) {
+        return camundaClient.newProcessInstanceSearchRequest()
+                .filter(filter -> filter.processInstanceKey(instanceKey))
+                .send()
+                .join()
+                .items()
+                .stream()
+                .findFirst();
     }
 
     @SuppressWarnings("unchecked")
