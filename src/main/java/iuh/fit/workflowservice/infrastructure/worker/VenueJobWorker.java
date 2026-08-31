@@ -43,7 +43,9 @@ public class VenueJobWorker {
             (String) variables.get("province"),
             (String) variables.get("district"),
             (String) variables.get("ward"),
-            (String) variables.get("city")
+            (String) variables.get("city"),
+            numberValue(variables.get("latitude")),
+            numberValue(variables.get("longitude"))
         );
 
         BaseResponse<OwnerApplicationResponse> response = errorHandler.execute(
@@ -161,5 +163,9 @@ public class VenueJobWorker {
         }
 
         return null;
+    }
+
+    private Double numberValue(Object value) {
+        return value instanceof Number number ? number.doubleValue() : null;
     }
 }
