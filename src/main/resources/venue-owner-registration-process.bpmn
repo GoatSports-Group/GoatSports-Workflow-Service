@@ -44,7 +44,13 @@
         <bpmn:flowNodeRef>Fork_Submit</bpmn:flowNodeRef>
         <bpmn:flowNodeRef>Task_GetPresignedURLs</bpmn:flowNodeRef>
         <bpmn:flowNodeRef>BoundaryEvent_GetPresignedFailed</bpmn:flowNodeRef>
-        <bpmn:flowNodeRef>EndEvent_GetPresignedFailed</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_CreateAppOutcome</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_PresignedOutcome</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_InitializationResult</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_RollbackOwnerApplication</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_NotifySubmissionPreparationFailed</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_NotifyDocumentCreationFailed</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_NotifyDocumentsCreated</bpmn:flowNodeRef>
       </bpmn:lane>
       <bpmn:lane id="Lane_Admin" name="Admin">
         <bpmn:flowNodeRef>Gateway_Approved</bpmn:flowNodeRef>
@@ -60,9 +66,9 @@
       <bpmn:outgoing>Flow_StartToFork</bpmn:outgoing>
     </bpmn:startEvent>
     <bpmn:parallelGateway id="Gateway_Submit">
-      <bpmn:incoming>Flow_0wy5rt3</bpmn:incoming>
-      <bpmn:incoming>Flow_1bgu5wi</bpmn:incoming>
-      <bpmn:outgoing>Flow_1emausm</bpmn:outgoing>
+      <bpmn:incoming>Flow_CreateOutcomeToJoin</bpmn:incoming>
+      <bpmn:incoming>Flow_PresignedOutcomeToJoin</bpmn:incoming>
+      <bpmn:outgoing>Flow_JoinToInitializationResult</bpmn:outgoing>
     </bpmn:parallelGateway>
     <bpmn:serviceTask id="Task_CreateDocuments" name="Create documents&#10;(venue-service)">
       <bpmn:extensionElements>
@@ -76,18 +82,20 @@
       <bpmn:errorEventDefinition id="ErrorEventDefinition_CreateDocuments" errorRef="Error_CreateDocuments" />
     </bpmn:boundaryEvent>
     <bpmn:endEvent id="EndEvent_CreateDocumentsFailed" name="Create documents failed">
-      <bpmn:incoming>Flow_CreateDocumentsFailedToEnd</bpmn:incoming>
+      <bpmn:incoming>Flow_DocumentFailureNotificationToEnd</bpmn:incoming>
       <bpmn:terminateEventDefinition id="TerminateEventDefinition_CreateDocuments" />
     </bpmn:endEvent>
     <bpmn:sequenceFlow id="Flow_StartToFork" sourceRef="StartEvent_SubmitClicked" targetRef="Fork_Submit" />
     <bpmn:sequenceFlow id="Flow_ForkToSaveApp" sourceRef="Fork_Submit" targetRef="Task_CreateOwnerApplication" />
     <bpmn:sequenceFlow id="Flow_ForkToGetPresigned" sourceRef="Fork_Submit" targetRef="Task_GetPresignedURLs" />
-    <bpmn:sequenceFlow id="Flow_0wy5rt3" sourceRef="Task_GetPresignedURLs" targetRef="Gateway_Submit" />
-    <bpmn:sequenceFlow id="Flow_CreateAppFailedToEnd" sourceRef="BoundaryEvent_CreateAppFailed" targetRef="EndEvent_CreateAppFailed" />
-    <bpmn:sequenceFlow id="Flow_1emausm" sourceRef="Gateway_Submit" targetRef="Task_UserUpload" />
-    <bpmn:sequenceFlow id="Flow_GetPresignedFailedToEnd" sourceRef="BoundaryEvent_GetPresignedFailed" targetRef="EndEvent_GetPresignedFailed" />
-    <bpmn:sequenceFlow id="Flow_06q6rha" sourceRef="Task_CreateDocuments" targetRef="Event_PublishMoveFile" />
-    <bpmn:sequenceFlow id="Flow_CreateDocumentsFailedToEnd" sourceRef="BoundaryEvent_CreateDocumentsFailed" targetRef="EndEvent_CreateDocumentsFailed" />
+    <bpmn:sequenceFlow id="Flow_0wy5rt3" sourceRef="Task_GetPresignedURLs" targetRef="Gateway_PresignedOutcome" />
+    <bpmn:sequenceFlow id="Flow_CreateAppFailedToEnd" sourceRef="BoundaryEvent_CreateAppFailed" targetRef="Gateway_CreateAppOutcome" />
+    <bpmn:sequenceFlow id="Flow_1emausm" sourceRef="Gateway_InitializationResult" targetRef="Task_UserUpload">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">=ownerApplication != null and presignedUrls != null</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_GetPresignedFailedToEnd" sourceRef="BoundaryEvent_GetPresignedFailed" targetRef="Gateway_PresignedOutcome" />
+    <bpmn:sequenceFlow id="Flow_06q6rha" sourceRef="Task_CreateDocuments" targetRef="Task_NotifyDocumentsCreated" />
+    <bpmn:sequenceFlow id="Flow_CreateDocumentsFailedToEnd" sourceRef="BoundaryEvent_CreateDocumentsFailed" targetRef="Task_NotifyDocumentCreationFailed" />
     <bpmn:sequenceFlow id="Flow_1fbqorl" sourceRef="Event_PublishMoveFile" targetRef="Event_PublishCreated" />
     <bpmn:sequenceFlow id="Flow_0jrb6p1" sourceRef="Task_AdminReview" targetRef="Gateway_Approved" />
     <bpmn:exclusiveGateway id="Gateway_Approved" name="Approved">
@@ -137,7 +145,7 @@
       <bpmn:extensionElements>
         <zeebe:taskDefinition type="publishFileMoveEvent" />
       </bpmn:extensionElements>
-      <bpmn:incoming>Flow_06q6rha</bpmn:incoming>
+      <bpmn:incoming>Flow_DocumentsCreatedToPublish</bpmn:incoming>
       <bpmn:outgoing>Flow_1fbqorl</bpmn:outgoing>
       <bpmn:messageEventDefinition id="MessageEventDefinition_1wybhae" messageRef="Message_FileMove" />
     </bpmn:intermediateThrowEvent>
@@ -157,9 +165,9 @@
       <bpmn:incoming>Flow_1bvph29</bpmn:incoming>
       <bpmn:outgoing>Flow_0jrb6p1</bpmn:outgoing>
     </bpmn:userTask>
-    <bpmn:sequenceFlow id="Flow_1bgu5wi" sourceRef="Task_CreateOwnerApplication" targetRef="Gateway_Submit" />
+    <bpmn:sequenceFlow id="Flow_1bgu5wi" sourceRef="Task_CreateOwnerApplication" targetRef="Gateway_CreateAppOutcome" />
     <bpmn:endEvent id="EndEvent_CreateAppFailed" name="Create failed">
-      <bpmn:incoming>Flow_CreateAppFailedToEnd</bpmn:incoming>
+      <bpmn:incoming>Flow_FailureNotificationToEnd</bpmn:incoming>
       <bpmn:terminateEventDefinition id="TerminateEventDefinition_1d6gn7v" />
     </bpmn:endEvent>
     <bpmn:sequenceFlow id="Flow_0yiji4a" sourceRef="Event_PublishApproved" targetRef="EndEvent_Approved" />
@@ -173,6 +181,9 @@
     <bpmn:sequenceFlow id="Flow_0n9prfu" sourceRef="Task_UserUpload" targetRef="Task_CreateDocuments" />
     <bpmn:userTask id="Task_UserUpload" name="Upload documents to R2&#10;(Angular)">
       <bpmn:extensionElements>
+        <zeebe:taskListeners>
+          <zeebe:taskListener eventType="creating" retries="3" type="ownerUploadReady" />
+        </zeebe:taskListeners>
         <zeebe:userTask />
       </bpmn:extensionElements>
       <bpmn:incoming>Flow_1emausm</bpmn:incoming>
@@ -205,10 +216,57 @@
       <bpmn:outgoing>Flow_GetPresignedFailedToEnd</bpmn:outgoing>
       <bpmn:errorEventDefinition id="ErrorEventDefinition_GetPresigned" errorRef="Error_GetPresigned" />
     </bpmn:boundaryEvent>
-    <bpmn:endEvent id="EndEvent_GetPresignedFailed" name="Get failed">
+    <bpmn:exclusiveGateway id="Gateway_CreateAppOutcome">
+      <bpmn:incoming>Flow_1bgu5wi</bpmn:incoming>
+      <bpmn:incoming>Flow_CreateAppFailedToEnd</bpmn:incoming>
+      <bpmn:outgoing>Flow_CreateOutcomeToJoin</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:sequenceFlow id="Flow_CreateOutcomeToJoin" sourceRef="Gateway_CreateAppOutcome" targetRef="Gateway_Submit" />
+    <bpmn:exclusiveGateway id="Gateway_PresignedOutcome">
+      <bpmn:incoming>Flow_0wy5rt3</bpmn:incoming>
       <bpmn:incoming>Flow_GetPresignedFailedToEnd</bpmn:incoming>
-      <bpmn:terminateEventDefinition id="TerminateEventDefinition_0k86tpe" />
-    </bpmn:endEvent>
+      <bpmn:outgoing>Flow_PresignedOutcomeToJoin</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:sequenceFlow id="Flow_PresignedOutcomeToJoin" sourceRef="Gateway_PresignedOutcome" targetRef="Gateway_Submit" />
+    <bpmn:sequenceFlow id="Flow_JoinToInitializationResult" sourceRef="Gateway_Submit" targetRef="Gateway_InitializationResult" />
+    <bpmn:exclusiveGateway id="Gateway_InitializationResult" default="Flow_InitializationFailed">
+      <bpmn:incoming>Flow_JoinToInitializationResult</bpmn:incoming>
+      <bpmn:outgoing>Flow_1emausm</bpmn:outgoing>
+      <bpmn:outgoing>Flow_InitializationFailed</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:sequenceFlow id="Flow_InitializationFailed" sourceRef="Gateway_InitializationResult" targetRef="Task_RollbackOwnerApplication" />
+    <bpmn:serviceTask id="Task_RollbackOwnerApplication" name="Rollback owner application&#10;(venue-service)">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="rollbackOwnerApplication" retries="3" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_InitializationFailed</bpmn:incoming>
+      <bpmn:outgoing>Flow_RollbackToFailureNotification</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:sequenceFlow id="Flow_RollbackToFailureNotification" sourceRef="Task_RollbackOwnerApplication" targetRef="Task_NotifySubmissionPreparationFailed" />
+    <bpmn:serviceTask id="Task_NotifySubmissionPreparationFailed" name="Notify submission failed&#10;(workflow-service)">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="notifySubmissionPreparationFailed" retries="3" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_RollbackToFailureNotification</bpmn:incoming>
+      <bpmn:outgoing>Flow_FailureNotificationToEnd</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:sequenceFlow id="Flow_FailureNotificationToEnd" sourceRef="Task_NotifySubmissionPreparationFailed" targetRef="EndEvent_CreateAppFailed" />
+    <bpmn:serviceTask id="Task_NotifyDocumentCreationFailed" name="Notify document creation failed&#10;(workflow-service)">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="notifyDocumentCreationFailed" retries="3" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_CreateDocumentsFailedToEnd</bpmn:incoming>
+      <bpmn:outgoing>Flow_DocumentFailureNotificationToEnd</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:sequenceFlow id="Flow_DocumentFailureNotificationToEnd" sourceRef="Task_NotifyDocumentCreationFailed" targetRef="EndEvent_CreateDocumentsFailed" />
+    <bpmn:serviceTask id="Task_NotifyDocumentsCreated" name="Confirm documents created&#10;(workflow-service)">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="notifyDocumentsCreated" retries="3" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_06q6rha</bpmn:incoming>
+      <bpmn:outgoing>Flow_DocumentsCreatedToPublish</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:sequenceFlow id="Flow_DocumentsCreatedToPublish" sourceRef="Task_NotifyDocumentsCreated" targetRef="Event_PublishMoveFile" />
   </bpmn:process>
   <bpmn:process id="Process_MoveFiles" name="Move Files Process" isExecutable="true">
     <bpmn:startEvent id="Event_MoveFiles" name="Documents created">
@@ -317,18 +375,15 @@
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Gateway_1ynq76r_di" bpmnElement="Gateway_Submit">
-        <dc:Bounds x="725" y="653" width="50" height="50" />
+        <dc:Bounds x="660" y="653" width="50" height="50" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Activity_1a9hux0_di" bpmnElement="Task_CreateDocuments">
         <dc:Bounds x="1050" y="638" width="100" height="80" />
       </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="BoundaryEvent_CreateDocumentsFailed_di" bpmnElement="BoundaryEvent_CreateDocumentsFailed">
-        <dc:Bounds x="1132" y="700" width="36" height="36" />
-      </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="EndEvent_CreateDocumentsFailed_di" bpmnElement="EndEvent_CreateDocumentsFailed">
-        <dc:Bounds x="1192" y="742" width="36" height="36" />
+        <dc:Bounds x="1330" y="752" width="36" height="36" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="1172" y="785" width="76" height="27" />
+          <dc:Bounds x="1310" y="795" width="76" height="27" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Gateway_Approved_di" bpmnElement="Gateway_Approved" isMarkerVisible="true">
@@ -374,9 +429,9 @@
         <bpmndi:BPMNLabel />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Event_1g20aic_di" bpmnElement="EndEvent_CreateAppFailed">
-        <dc:Bounds x="572" y="622" width="36" height="36" />
+        <dc:Bounds x="1100" y="752" width="36" height="36" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="560" y="665" width="63" height="14" />
+          <dc:Bounds x="1088" y="795" width="63" height="14" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Event_0j3yrud_di" bpmnElement="EndEvent_Approved">
@@ -400,17 +455,35 @@
         <dc:Bounds x="410" y="700" width="100" height="80" />
         <bpmndi:BPMNLabel />
       </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="Event_12d23a5_di" bpmnElement="EndEvent_GetPresignedFailed">
-        <dc:Bounds x="572" y="762" width="36" height="36" />
-        <bpmndi:BPMNLabel>
-          <dc:Bounds x="566" y="805" width="48" height="14" />
-        </bpmndi:BPMNLabel>
+      <bpmndi:BPMNShape id="Gateway_CreateAppOutcome_di" bpmnElement="Gateway_CreateAppOutcome" isMarkerVisible="true">
+        <dc:Bounds x="565" y="575" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_PresignedOutcome_di" bpmnElement="Gateway_PresignedOutcome" isMarkerVisible="true">
+        <dc:Bounds x="565" y="715" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_InitializationResult_di" bpmnElement="Gateway_InitializationResult" isMarkerVisible="true">
+        <dc:Bounds x="770" y="653" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_RollbackOwnerApplication_di" bpmnElement="Task_RollbackOwnerApplication">
+        <dc:Bounds x="850" y="730" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_NotifySubmissionPreparationFailed_di" bpmnElement="Task_NotifySubmissionPreparationFailed">
+        <dc:Bounds x="980" y="730" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_NotifyDocumentCreationFailed_di" bpmnElement="Task_NotifyDocumentCreationFailed">
+        <dc:Bounds x="1200" y="730" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_NotifyDocumentsCreated_di" bpmnElement="Task_NotifyDocumentsCreated">
+        <dc:Bounds x="1175" y="560" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BoundaryEvent_GetPresignedFailed_di" bpmnElement="BoundaryEvent_GetPresignedFailed">
+        <dc:Bounds x="492" y="762" width="36" height="36" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="BoundaryEvent_CreateAppFailed_di" bpmnElement="BoundaryEvent_CreateAppFailed">
         <dc:Bounds x="492" y="622" width="36" height="36" />
       </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="BoundaryEvent_GetPresignedFailed_di" bpmnElement="BoundaryEvent_GetPresignedFailed">
-        <dc:Bounds x="492" y="762" width="36" height="36" />
+      <bpmndi:BPMNShape id="BoundaryEvent_CreateDocumentsFailed_di" bpmnElement="BoundaryEvent_CreateDocumentsFailed">
+        <dc:Bounds x="1132" y="700" width="36" height="36" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNEdge id="Flow_StartToFork_di" bpmnElement="Flow_StartToFork">
         <di:waypoint x="260" y="468" />
@@ -429,29 +502,32 @@
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Flow_0wy5rt3_di" bpmnElement="Flow_0wy5rt3">
         <di:waypoint x="510" y="740" />
-        <di:waypoint x="750" y="740" />
-        <di:waypoint x="750" y="703" />
+        <di:waypoint x="565" y="740" />
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Flow_CreateAppFailedToEnd_di" bpmnElement="Flow_CreateAppFailedToEnd">
         <di:waypoint x="528" y="640" />
-        <di:waypoint x="572" y="640" />
+        <di:waypoint x="590" y="640" />
+        <di:waypoint x="590" y="625" />
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Flow_1emausm_di" bpmnElement="Flow_1emausm">
-        <di:waypoint x="775" y="678" />
+        <di:waypoint x="820" y="678" />
         <di:waypoint x="860" y="678" />
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Flow_GetPresignedFailedToEnd_di" bpmnElement="Flow_GetPresignedFailedToEnd">
         <di:waypoint x="528" y="780" />
-        <di:waypoint x="572" y="780" />
+        <di:waypoint x="590" y="780" />
+        <di:waypoint x="590" y="765" />
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Flow_06q6rha_di" bpmnElement="Flow_06q6rha">
         <di:waypoint x="1150" y="678" />
-        <di:waypoint x="1242" y="678" />
+        <di:waypoint x="1162" y="678" />
+        <di:waypoint x="1162" y="600" />
+        <di:waypoint x="1175" y="600" />
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Flow_CreateDocumentsFailedToEnd_di" bpmnElement="Flow_CreateDocumentsFailedToEnd">
         <di:waypoint x="1150" y="736" />
-        <di:waypoint x="1150" y="760" />
-        <di:waypoint x="1192" y="760" />
+        <di:waypoint x="1150" y="770" />
+        <di:waypoint x="1200" y="770" />
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Flow_1fbqorl_di" bpmnElement="Flow_1fbqorl">
         <di:waypoint x="1278" y="678" />
@@ -490,8 +566,7 @@
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Flow_1bgu5wi_di" bpmnElement="Flow_1bgu5wi">
         <di:waypoint x="510" y="600" />
-        <di:waypoint x="750" y="600" />
-        <di:waypoint x="750" y="653" />
+        <di:waypoint x="565" y="600" />
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Flow_0yiji4a_di" bpmnElement="Flow_0yiji4a">
         <di:waypoint x="2160" y="696" />
@@ -504,6 +579,42 @@
       <bpmndi:BPMNEdge id="Flow_0n9prfu_di" bpmnElement="Flow_0n9prfu">
         <di:waypoint x="960" y="678" />
         <di:waypoint x="1050" y="678" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_CreateOutcomeToJoin_di" bpmnElement="Flow_CreateOutcomeToJoin">
+        <di:waypoint x="615" y="600" />
+        <di:waypoint x="685" y="600" />
+        <di:waypoint x="685" y="653" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_PresignedOutcomeToJoin_di" bpmnElement="Flow_PresignedOutcomeToJoin">
+        <di:waypoint x="615" y="740" />
+        <di:waypoint x="685" y="740" />
+        <di:waypoint x="685" y="703" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_JoinToInitializationResult_di" bpmnElement="Flow_JoinToInitializationResult">
+        <di:waypoint x="710" y="678" />
+        <di:waypoint x="770" y="678" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_InitializationFailed_di" bpmnElement="Flow_InitializationFailed">
+        <di:waypoint x="795" y="703" />
+        <di:waypoint x="795" y="770" />
+        <di:waypoint x="850" y="770" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_RollbackToFailureNotification_di" bpmnElement="Flow_RollbackToFailureNotification">
+        <di:waypoint x="950" y="770" />
+        <di:waypoint x="980" y="770" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_FailureNotificationToEnd_di" bpmnElement="Flow_FailureNotificationToEnd">
+        <di:waypoint x="1080" y="770" />
+        <di:waypoint x="1100" y="770" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_DocumentFailureNotificationToEnd_di" bpmnElement="Flow_DocumentFailureNotificationToEnd">
+        <di:waypoint x="1300" y="770" />
+        <di:waypoint x="1330" y="770" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_DocumentsCreatedToPublish_di" bpmnElement="Flow_DocumentsCreatedToPublish">
+        <di:waypoint x="1210" y="640" />
+        <di:waypoint x="1210" y="678" />
+        <di:waypoint x="1242" y="678" />
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNShape id="Participant_04ycnde_di" bpmnElement="Participant_MoveFilesProcess" isHorizontal="true">
         <dc:Bounds x="1175" y="76" width="525" height="250" />

@@ -1,6 +1,7 @@
 package iuh.fit.workflowservice.application.dto.request.venue;
 
 public record SubmitOwnerApplicationRequest(
+    String ownerApplicationRequestId,
     String userId,
     String fullName,
     String phone,

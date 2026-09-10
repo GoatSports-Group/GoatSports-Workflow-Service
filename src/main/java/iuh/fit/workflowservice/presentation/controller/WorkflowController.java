@@ -7,8 +7,10 @@ import io.camunda.client.api.search.response.ProcessInstance;
 import io.camunda.client.api.search.response.SearchResponse;
 import io.camunda.client.api.search.response.UserTask;
 import io.camunda.client.api.search.response.Variable;
+import iuh.fit.workflowservice.application.dto.submission.OwnerUploadPreparation;
 import iuh.fit.workflowservice.application.exception.ServiceException;
 import iuh.fit.workflowservice.application.port.security.CurrentUserProvider;
+import iuh.fit.workflowservice.application.port.submission.OwnerApplicationSubmissionChannel;
 import iuh.fit.workflowservice.application.port.util.ObjectMapperPort;
 import iuh.fit.workflowservice.presentation.request.CompleteReviewRequest;
 import iuh.fit.workflowservice.presentation.request.CompleteTaskRequest;
@@ -32,6 +34,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/workflows")
@@ -46,6 +49,7 @@ public class WorkflowController {
     private final CamundaClient camundaClient;
     private final CurrentUserProvider currentUserProvider;
     private final ObjectMapperPort objectMapper;
+    private final OwnerApplicationSubmissionChannel submissionChannel;
 
     @PostMapping("/start")
     @PreAuthorize("hasRole('VENUE_OWNER')")
@@ -55,6 +59,7 @@ public class WorkflowController {
     ) throws ServiceException {
         Map<String, Object> variables = new HashMap<>(request.variables());
         variables.put("userId", currentUserId());
+        variables.put("ownerApplicationRequestId", UUID.randomUUID().toString());
 
         ProcessInstanceEvent event = camundaClient.newCreateInstanceCommand()
                 .bpmnProcessId(OWNER_APPLICATION_PROCESS_ID)
@@ -63,9 +68,13 @@ public class WorkflowController {
                 .send()
                 .join();
 
+        OwnerUploadPreparation preparation = submissionChannel.awaitUploadPreparation(
+                event.getProcessInstanceKey()
+        );
         return ResponseEntity.status(HttpStatus.CREATED).body(new ProcessInstanceResponse(
                 event.getProcessInstanceKey(), event.getBpmnProcessId(), event.getVersion(),
-                event.getProcessDefinitionKey()
+                event.getProcessDefinitionKey(), preparation.taskKey(),
+                preparation.ownerApplicationId(), preparation.presignedUrls()
         ));
     }
 
@@ -98,9 +107,10 @@ public class WorkflowController {
         return ResponseEntity.ok(task == null ? null : toResponse(task));
     }
 
-    @PostMapping("/tasks/{taskKey}/complete")
+    @PostMapping("/instances/{instanceKey}/tasks/{taskKey}/complete")
     @PreAuthorize("hasRole('VENUE_OWNER')")
     public ResponseEntity<Void> completeOwnerUpload(
+            @PathVariable long instanceKey,
             @PathVariable long taskKey,
             @Valid @RequestBody CompleteTaskRequest request
     ) throws ServiceException {
@@ -110,9 +120,13 @@ public class WorkflowController {
                         .state(UserTaskState.CREATED))
                 .send().join().items().stream().findFirst()
                 .orElseThrow(() -> new ServiceException("Không tìm thấy bước tải hồ sơ đang chờ."));
-        assertOwner(task.getProcessInstanceKey());
+        if (task.getProcessInstanceKey() != instanceKey) {
+            throw new ServiceException("Bước tải hồ sơ không thuộc quy trình đã chọn.");
+        }
+        assertOwner(instanceKey);
         camundaClient.newCompleteUserTaskCommand(taskKey)
                 .variables(request.variables()).send().join();
+        submissionChannel.awaitDocumentsCreated(instanceKey);
         return ResponseEntity.noContent().build();
     }
 

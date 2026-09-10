@@ -87,10 +87,10 @@ class WorkflowWorkerErrorHandlerTest {
         when(job.getRetries()).thenReturn(1);
         BaseResponse<Void> response = new BaseResponse<>(503, null, "Unavailable", "Service unavailable");
 
-        JobError error = assertInstanceOf(JobError.class,
+        BpmnError error = assertInstanceOf(BpmnError.class,
                 handler.fromResponse(job, "STORAGE_SERVICE", "GET_PRESIGNED_FAILED", response));
 
-        assertEquals(0, error.getRetries());
+        assertEquals("GET_PRESIGNED_FAILED", error.getErrorCode());
         assertEquals("FAILED", variables(error).get("workflowStatus"));
     }
 

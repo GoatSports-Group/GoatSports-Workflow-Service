@@ -31,6 +31,7 @@ public class VenueJobWorker {
 
         Map<String, Object> variables = job.getVariablesAsMap();
         SubmitOwnerApplicationRequest request = new SubmitOwnerApplicationRequest(
+            (String) variables.get("ownerApplicationRequestId"),
             (String) variables.get("userId"),
             (String) variables.get("fullName"),
             (String) variables.get("phone"),
@@ -163,6 +164,21 @@ public class VenueJobWorker {
         }
 
         return null;
+    }
+
+    @JobWorker(type = "rollbackOwnerApplication")
+    public Map<String, Object> handleRollbackOwnerApplication(ActivatedJob job) {
+        LOGGER.info("Executing rollbackOwnerApplication for job: {}", job.getKey());
+        Map<String, Object> variables = job.getVariablesAsMap();
+        String ownerApplicationId = (String) variables.get("ownerApplicationRequestId");
+
+        errorHandler.execute(
+                job,
+                "VENUE_SERVICE",
+                "ROLLBACK_APP_FAILED",
+                () -> venueClient.rollbackApplication(ownerApplicationId)
+        );
+        return Map.of("ownerApplicationRolledBack", true);
     }
 
     private Double numberValue(Object value) {

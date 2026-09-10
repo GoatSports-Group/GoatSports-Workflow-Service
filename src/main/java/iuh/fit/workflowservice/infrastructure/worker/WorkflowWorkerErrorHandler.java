@@ -87,8 +87,8 @@ public class WorkflowWorkerErrorHandler {
         String workflowStatus = businessError || remainingRetries == 0 ? "FAILED" : "RETRYING";
         Map<String, Object> variables = errorVariables(workflowStatus, source, bpmnErrorCode, status, message);
 
-        if (businessError) {
-            log.warn("Worker {} stopped by business error {}: {}", source, status, message);
+        if (businessError || remainingRetries == 0) {
+            log.warn("Worker {} stopped after status {}: {}", source, status, message);
             return CamundaError.bpmnError(bpmnErrorCode, message, variables, cause);
         }
 
