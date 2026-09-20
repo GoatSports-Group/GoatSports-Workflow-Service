@@ -14,7 +14,8 @@ import java.util.List;
 @FeignClient(
     name = "GOATSPORTS-STORAGE-SERVICE",
     url = "${storage.service.url}",
-    path = "/internal/files"
+    path = "/internal/files",
+    configuration = StorageClientConfig.class
 )
 public interface StorageClient {
     @PostMapping("/presigned-url")
