@@ -19,4 +19,10 @@ public class ApiLogEvent {
     private int statusCode;
     private LocalDateTime timestamp;
     private String errorMessage;
+    /** Ngữ cảnh để lần vết: service ghi (vd auth-service), mã tương quan của request và request gốc. */
+    private String sourceService;
+    private String correlationId;
+    private String httpMethod;
+    private String requestUri;
+    private String userAgent;
 }
