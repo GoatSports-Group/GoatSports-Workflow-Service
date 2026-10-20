@@ -1,0 +1,393 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0" xmlns:modeler="http://camunda.org/schema/modeler/1.0" id="Definitions_BookingCancellationRefund" targetNamespace="http://goatsports.click/bpmn" exporter="Camunda Modeler" exporterVersion="5.52.0" modeler:executionPlatform="Camunda Cloud" modeler:executionPlatformVersion="8.9.0">
+  <bpmn:message id="Message_Decided" name="BookingCancellationDecided">
+    <bpmn:extensionElements>
+      <zeebe:subscription correlationKey="=cancellationId" />
+    </bpmn:extensionElements>
+  </bpmn:message>
+  <bpmn:message id="Message_RefundStatusChanged" name="RefundStatusChanged">
+    <bpmn:extensionElements>
+      <zeebe:subscription correlationKey="=refundId" />
+    </bpmn:extensionElements>
+  </bpmn:message>
+  <bpmn:error id="Error_CancellationMissing" name="Cancellation missing" errorCode="CANCELLATION_NOT_FOUND" />
+  <bpmn:process id="Process_BookingCancellationRefund" name="Hủy đặt sân và hoàn tiền" isExecutable="true">
+    <bpmn:exclusiveGateway id="Gateway_ReviewMode" name="Cần chủ sân duyệt?" default="Flow_ToOwnerReview">
+      <bpmn:incoming>Flow_StartToReview</bpmn:incoming>
+      <bpmn:outgoing>Flow_Automatic</bpmn:outgoing>
+      <bpmn:outgoing>Flow_ToOwnerReview</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:sequenceFlow id="Flow_Approved" name="Chấp thuận" sourceRef="Gateway_Decision" targetRef="Gateway_HasRefund">
+      <bpmn:conditionExpression xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="bpmn:tFormalExpression">=approved = true</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:receiveTask id="Task_WaitOwnerDecision" name="Chờ chủ sân duyệt" messageRef="Message_Decided">
+      <bpmn:incoming>Flow_ToOwnerReview</bpmn:incoming>
+      <bpmn:outgoing>Flow_ToDecision</bpmn:outgoing>
+    </bpmn:receiveTask>
+    <bpmn:exclusiveGateway id="Gateway_Decision" name="Chủ sân chấp thuận?" default="Flow_Rejected">
+      <bpmn:incoming>Flow_ToDecision</bpmn:incoming>
+      <bpmn:outgoing>Flow_Approved</bpmn:outgoing>
+      <bpmn:outgoing>Flow_Rejected</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:sequenceFlow id="Flow_ToOwnerReview" name="Chủ sân duyệt" sourceRef="Gateway_ReviewMode" targetRef="Task_WaitOwnerDecision" />
+    <bpmn:sequenceFlow id="Flow_StillRefunding" name="Chưa" sourceRef="Gateway_Refunded" targetRef="Event_RefundStatusChanged" />
+    <bpmn:sequenceFlow id="Flow_HasRefund" name="Có" sourceRef="Gateway_HasRefund" targetRef="Task_CreateRefund">
+      <bpmn:conditionExpression xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="bpmn:tFormalExpression">=refundAmount &gt; 0</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:exclusiveGateway id="Gateway_HasRefund" name="Có tiền hoàn?" default="Flow_NoRefund">
+      <bpmn:incoming>Flow_Automatic</bpmn:incoming>
+      <bpmn:incoming>Flow_Approved</bpmn:incoming>
+      <bpmn:incoming>Flow_AutoApproveToRefund</bpmn:incoming>
+      <bpmn:outgoing>Flow_HasRefund</bpmn:outgoing>
+      <bpmn:outgoing>Flow_NoRefund</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:endEvent id="EndEvent_Refunded" name="Đã hoàn tiền">
+      <bpmn:incoming>Flow_Refunded</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:exclusiveGateway id="Gateway_Refunded" name="Đã hoàn xong?" default="Flow_StillRefunding">
+      <bpmn:incoming>Flow_StateToRefunded</bpmn:incoming>
+      <bpmn:outgoing>Flow_Refunded</bpmn:outgoing>
+      <bpmn:outgoing>Flow_StillRefunding</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:endEvent id="EndEvent_Approved" name="Đã hủy">
+      <bpmn:incoming>Flow_ApprovedToEnd</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:endEvent id="EndEvent_Reminded" name="Đã nhắc">
+      <bpmn:incoming>Flow_RemindToEnd</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:endEvent id="EndEvent_Rejected" name="Đã từ chối">
+      <bpmn:incoming>Flow_RejectedToEnd</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_ApprovedToEnd" sourceRef="Task_StateApproved" targetRef="EndEvent_Approved" />
+    <bpmn:sequenceFlow id="Flow_AutoApproveToRefund" sourceRef="Event_AutoApprove" targetRef="Gateway_HasRefund" />
+    <bpmn:sequenceFlow id="Flow_CreatedToState" sourceRef="Task_CreateRefund" targetRef="Task_StateRefund" />
+    <bpmn:sequenceFlow id="Flow_DeadlineToAutoApprove" sourceRef="Timer_PlayStarts" targetRef="Event_AutoApprove" />
+    <bpmn:sequenceFlow id="Flow_RefundChangedToState" sourceRef="Event_RefundStatusChanged" targetRef="Task_StateRefund" />
+    <bpmn:sequenceFlow id="Flow_RejectedToEnd" sourceRef="Task_StateRejected" targetRef="EndEvent_Rejected" />
+    <bpmn:sequenceFlow id="Flow_RemindToEnd" sourceRef="Task_RemindOwner" targetRef="EndEvent_Reminded" />
+    <bpmn:sequenceFlow id="Flow_StartToReview" sourceRef="StartEvent_Requested" targetRef="Gateway_ReviewMode" />
+    <bpmn:sequenceFlow id="Flow_StateToRefunded" sourceRef="Task_StateRefund" targetRef="Gateway_Refunded" />
+    <bpmn:sequenceFlow id="Flow_ToDecision" sourceRef="Task_WaitOwnerDecision" targetRef="Gateway_Decision" />
+    <bpmn:sequenceFlow id="Flow_ToRemind" sourceRef="Timer_RemindOwner" targetRef="Task_RemindOwner" />
+    <bpmn:serviceTask id="Task_StateRefund" name="Ghi trạng thái hoàn tiền">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="booking-cancellation.apply-state" retries="5" />
+        <zeebe:ioMapping>
+          <zeebe:input source="=if refundStatus = &#34;SUCCEEDED&#34; then &#34;REFUNDED&#34; else if refundStatus = &#34;FAILED&#34; then &#34;REFUND_FAILED&#34; else if refundStatus = &#34;AWAITING_CLAIM&#34; then &#34;REFUND_AWAITING_CLAIM&#34; else if refundStatus = &#34;AWAITING_BANK_ACCOUNT&#34; then &#34;REFUND_AWAITING_BANK_ACCOUNT&#34; else if refundStatus = &#34;MANUAL_REVIEW&#34; then &#34;REFUND_MANUAL_REVIEW&#34; else &#34;REFUND_PROCESSING&#34;" target="status" />
+          <zeebe:output source="=status" target="status" />
+          <zeebe:output source="=statusVersion" target="statusVersion" />
+        </zeebe:ioMapping>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_CreatedToState</bpmn:incoming>
+      <bpmn:incoming>Flow_RefundChangedToState</bpmn:incoming>
+      <bpmn:outgoing>Flow_StateToRefunded</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:serviceTask id="Task_StateApproved" name="Ghi trạng thái: Đã hủy, không hoàn">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="booking-cancellation.apply-state" retries="5" />
+        <zeebe:ioMapping>
+          <zeebe:input source="=&#34;APPROVED&#34;" target="status" />
+          <zeebe:output source="=status" target="status" />
+          <zeebe:output source="=statusVersion" target="statusVersion" />
+        </zeebe:ioMapping>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_NoRefund</bpmn:incoming>
+      <bpmn:outgoing>Flow_ApprovedToEnd</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:serviceTask id="Task_StateRejected" name="Ghi trạng thái: Từ chối">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="booking-cancellation.apply-state" retries="5" />
+        <zeebe:ioMapping>
+          <zeebe:input source="=&#34;REJECTED&#34;" target="status" />
+          <zeebe:output source="=status" target="status" />
+          <zeebe:output source="=statusVersion" target="statusVersion" />
+        </zeebe:ioMapping>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_Rejected</bpmn:incoming>
+      <bpmn:outgoing>Flow_RejectedToEnd</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:sequenceFlow id="Flow_NoRefund" name="Không" sourceRef="Gateway_HasRefund" targetRef="Task_StateApproved" />
+    <bpmn:startEvent id="StartEvent_Requested" name="Người chơi yêu cầu hủy">
+      <bpmn:outgoing>Flow_StartToReview</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:serviceTask id="Task_RemindOwner" name="Nhắc chủ sân duyệt">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="booking-cancellation.remind-owner" retries="3" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_ToRemind</bpmn:incoming>
+      <bpmn:outgoing>Flow_RemindToEnd</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:intermediateCatchEvent id="Event_RefundStatusChanged" name="payment-service đổi trạng thái khoản hoàn">
+      <bpmn:incoming>Flow_StillRefunding</bpmn:incoming>
+      <bpmn:outgoing>Flow_RefundChangedToState</bpmn:outgoing>
+      <bpmn:messageEventDefinition id="MessageDef_RefundStatusChanged" messageRef="Message_RefundStatusChanged" />
+    </bpmn:intermediateCatchEvent>
+    <bpmn:sequenceFlow id="Flow_Refunded" name="Rồi" sourceRef="Gateway_Refunded" targetRef="EndEvent_Refunded">
+      <bpmn:conditionExpression xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="bpmn:tFormalExpression">=refundStatus = "SUCCEEDED"</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:boundaryEvent id="Timer_RemindOwner" name="Sau 6 giờ" cancelActivity="false" attachedToRef="Task_WaitOwnerDecision">
+      <bpmn:outgoing>Flow_ToRemind</bpmn:outgoing>
+      <bpmn:timerEventDefinition id="TimerDef_RemindOwner">
+        <bpmn:timeDuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="bpmn:tFormalExpression">PT6H</bpmn:timeDuration>
+      </bpmn:timerEventDefinition>
+    </bpmn:boundaryEvent>
+    <bpmn:serviceTask id="Task_CreateRefund" name="Tạo khoản hoàn (payment-service)">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="booking-cancellation.create-refund" retries="5" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_HasRefund</bpmn:incoming>
+      <bpmn:outgoing>Flow_CreatedToState</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:boundaryEvent id="Timer_PlayStarts" name="Tới giờ chơi" attachedToRef="Task_WaitOwnerDecision">
+      <bpmn:outgoing>Flow_DeadlineToAutoApprove</bpmn:outgoing>
+      <bpmn:timerEventDefinition id="TimerDef_PlayStarts">
+        <bpmn:timeDate xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="bpmn:tFormalExpression">=playStartAt</bpmn:timeDate>
+      </bpmn:timerEventDefinition>
+    </bpmn:boundaryEvent>
+    <bpmn:intermediateThrowEvent id="Event_AutoApprove" name="Tự chấp thuận">
+      <bpmn:extensionElements>
+        <zeebe:ioMapping>
+          <zeebe:output source="=true" target="approved" />
+          <zeebe:output source="=&#34;Tự động chấp thuận vì chủ sân không phản hồi trước giờ chơi.&#34;" target="decisionNote" />
+        </zeebe:ioMapping>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_DeadlineToAutoApprove</bpmn:incoming>
+      <bpmn:outgoing>Flow_AutoApproveToRefund</bpmn:outgoing>
+    </bpmn:intermediateThrowEvent>
+    <bpmn:sequenceFlow id="Flow_Rejected" name="Từ chối" sourceRef="Gateway_Decision" targetRef="Task_StateRejected" />
+    <bpmn:sequenceFlow id="Flow_Automatic" name="Tự duyệt" sourceRef="Gateway_ReviewMode" targetRef="Gateway_HasRefund">
+      <bpmn:conditionExpression xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="bpmn:tFormalExpression">=reviewMode = "AUTOMATIC"</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:subProcess id="SubProcess_CancellationMissing" name="Yêu cầu hủy không còn trong venue-service" triggeredByEvent="true">
+      <bpmn:endEvent id="EndEvent_CancellationMissing" name="Bỏ qua">
+        <bpmn:incoming>Flow_MissingToEnd</bpmn:incoming>
+      </bpmn:endEvent>
+      <bpmn:sequenceFlow id="Flow_MissingToEnd" sourceRef="StartEvent_CancellationMissing" targetRef="EndEvent_CancellationMissing" />
+      <bpmn:startEvent id="StartEvent_CancellationMissing" name="Không tìm thấy yêu cầu hủy">
+        <bpmn:outgoing>Flow_MissingToEnd</bpmn:outgoing>
+        <bpmn:errorEventDefinition id="ErrorDef_CancellationMissing" errorRef="Error_CancellationMissing" />
+      </bpmn:startEvent>
+    </bpmn:subProcess>
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="Diagram_BookingCancellationRefund">
+    <bpmndi:BPMNPlane id="Plane_BookingCancellationRefund" bpmnElement="Process_BookingCancellationRefund">
+      <bpmndi:BPMNShape id="Shape_Gateway_ReviewMode" bpmnElement="Gateway_ReviewMode" isMarkerVisible="true">
+        <dc:Bounds x="245" y="255" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="232" y="312" width="76" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Task_WaitOwnerDecision" bpmnElement="Task_WaitOwnerDecision">
+        <dc:Bounds x="350" y="240" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Gateway_Decision" bpmnElement="Gateway_Decision" isMarkerVisible="true">
+        <dc:Bounds x="505" y="255" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="536" y="300" width="68" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Gateway_HasRefund" bpmnElement="Gateway_HasRefund" isMarkerVisible="true">
+        <dc:Bounds x="645" y="255" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="685" y="300" width="69" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_EndEvent_Refunded" bpmnElement="EndEvent_Refunded">
+        <dc:Bounds x="1192" y="262" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1178" y="305" width="64" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Gateway_Refunded" bpmnElement="Gateway_Refunded" isMarkerVisible="true">
+        <dc:Bounds x="1085" y="255" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1074" y="231" width="72" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_EndEvent_Approved" bpmnElement="EndEvent_Approved">
+        <dc:Bounds x="652" y="532" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="652" y="575" width="36" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_EndEvent_Reminded" bpmnElement="EndEvent_Reminded">
+        <dc:Bounds x="362" y="532" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="360" y="575" width="40" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_EndEvent_Rejected" bpmnElement="EndEvent_Rejected">
+        <dc:Bounds x="512" y="532" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="503" y="575" width="54" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Task_StateRefund" bpmnElement="Task_StateRefund">
+        <dc:Bounds x="920" y="240" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Task_StateApproved" bpmnElement="Task_StateApproved">
+        <dc:Bounds x="620" y="400" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Task_StateRejected" bpmnElement="Task_StateRejected">
+        <dc:Bounds x="480" y="400" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_StartEvent_Requested" bpmnElement="StartEvent_Requested">
+        <dc:Bounds x="152" y="262" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="128" y="305" width="84" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Task_RemindOwner" bpmnElement="Task_RemindOwner">
+        <dc:Bounds x="330" y="400" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Event_RefundStatusChanged" bpmnElement="Event_RefundStatusChanged">
+        <dc:Bounds x="1092" y="402" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1140" y="400" width="120" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Task_CreateRefund" bpmnElement="Task_CreateRefund">
+        <dc:Bounds x="760" y="240" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Event_AutoApprove" bpmnElement="Event_AutoApprove">
+        <dc:Bounds x="522" y="162" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="505" y="138" width="70" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_SubProcess_CancellationMissing" bpmnElement="SubProcess_CancellationMissing" isExpanded="true">
+        <dc:Bounds x="150" y="640" width="300" height="140" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_EndEvent_CancellationMissing" bpmnElement="EndEvent_CancellationMissing">
+        <dc:Bounds x="362" y="692" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="362" y="735" width="36" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_StartEvent_CancellationMissing" bpmnElement="StartEvent_CancellationMissing">
+        <dc:Bounds x="192" y="692" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="170" y="735" width="80" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Edge_Flow_MissingToEnd" bpmnElement="Flow_MissingToEnd">
+        <di:waypoint x="228" y="710" />
+        <di:waypoint x="362" y="710" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="Shape_Timer_PlayStarts" bpmnElement="Timer_PlayStarts">
+        <dc:Bounds x="412" y="222" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="440" y="206" width="60" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Timer_RemindOwner" bpmnElement="Timer_RemindOwner">
+        <dc:Bounds x="362" y="302" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="314" y="338" width="48" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Edge_Flow_Approved" bpmnElement="Flow_Approved">
+        <di:waypoint x="555" y="280" />
+        <di:waypoint x="645" y="280" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="573" y="262" width="56" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_ToOwnerReview" bpmnElement="Flow_ToOwnerReview">
+        <di:waypoint x="295" y="280" />
+        <di:waypoint x="350" y="280" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_StillRefunding" bpmnElement="Flow_StillRefunding">
+        <di:waypoint x="1110" y="305" />
+        <di:waypoint x="1110" y="402" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1118" y="350" width="28" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_HasRefund" bpmnElement="Flow_HasRefund">
+        <di:waypoint x="695" y="280" />
+        <di:waypoint x="760" y="280" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="719" y="262" width="16" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_ApprovedToEnd" bpmnElement="Flow_ApprovedToEnd">
+        <di:waypoint x="670" y="480" />
+        <di:waypoint x="670" y="532" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_AutoApproveToRefund" bpmnElement="Flow_AutoApproveToRefund">
+        <di:waypoint x="558" y="180" />
+        <di:waypoint x="670" y="180" />
+        <di:waypoint x="670" y="255" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_CreatedToState" bpmnElement="Flow_CreatedToState">
+        <di:waypoint x="860" y="280" />
+        <di:waypoint x="920" y="280" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_DeadlineToAutoApprove" bpmnElement="Flow_DeadlineToAutoApprove">
+        <di:waypoint x="430" y="222" />
+        <di:waypoint x="430" y="180" />
+        <di:waypoint x="522" y="180" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_RefundChangedToState" bpmnElement="Flow_RefundChangedToState">
+        <di:waypoint x="1092" y="420" />
+        <di:waypoint x="970" y="420" />
+        <di:waypoint x="970" y="320" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_RejectedToEnd" bpmnElement="Flow_RejectedToEnd">
+        <di:waypoint x="530" y="480" />
+        <di:waypoint x="530" y="532" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_RemindToEnd" bpmnElement="Flow_RemindToEnd">
+        <di:waypoint x="380" y="480" />
+        <di:waypoint x="380" y="532" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_StartToReview" bpmnElement="Flow_StartToReview">
+        <di:waypoint x="188" y="280" />
+        <di:waypoint x="245" y="280" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_StateToRefunded" bpmnElement="Flow_StateToRefunded">
+        <di:waypoint x="1020" y="280" />
+        <di:waypoint x="1085" y="280" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_ToDecision" bpmnElement="Flow_ToDecision">
+        <di:waypoint x="450" y="280" />
+        <di:waypoint x="505" y="280" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_ToRemind" bpmnElement="Flow_ToRemind">
+        <di:waypoint x="380" y="338" />
+        <di:waypoint x="380" y="400" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_NoRefund" bpmnElement="Flow_NoRefund">
+        <di:waypoint x="670" y="305" />
+        <di:waypoint x="670" y="400" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="678" y="350" width="36" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_Refunded" bpmnElement="Flow_Refunded">
+        <di:waypoint x="1135" y="280" />
+        <di:waypoint x="1192" y="280" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1153" y="262" width="20" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_Rejected" bpmnElement="Flow_Rejected">
+        <di:waypoint x="530" y="305" />
+        <di:waypoint x="530" y="400" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="538" y="350" width="38" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_Automatic" bpmnElement="Flow_Automatic">
+        <di:waypoint x="270" y="255" />
+        <di:waypoint x="270" y="110" />
+        <di:waypoint x="670" y="110" />
+        <di:waypoint x="670" y="255" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="440" y="92" width="44" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>
