@@ -8,6 +8,7 @@ import io.camunda.client.api.command.ClientStatusException;
 import io.camunda.client.api.command.CreateProcessInstanceCommandStep1;
 import io.camunda.client.api.search.enums.ProcessInstanceState;
 import io.camunda.client.api.search.response.ProcessInstance;
+import io.camunda.client.api.search.response.SearchResponse;
 import io.camunda.client.api.search.response.Variable;
 import iuh.fit.workflowservice.application.dto.cancellation.CancellationState;
 import iuh.fit.workflowservice.application.dto.cancellation.StartCancellationCommand;
@@ -112,7 +113,7 @@ public class CamundaCancellationProcessAdapter implements CancellationProcessPor
         String cursor = null;
         while (true) {
             String after = cursor;
-            var page = camundaClient.newProcessInstanceSearchRequest()
+            SearchResponse<ProcessInstance> page = camundaClient.newProcessInstanceSearchRequest()
                     .filter(filter -> filter.processDefinitionId(PROCESS_ID).state(ProcessInstanceState.ACTIVE))
                     .page(pagination -> {
                         pagination.limit(PAGE_SIZE);

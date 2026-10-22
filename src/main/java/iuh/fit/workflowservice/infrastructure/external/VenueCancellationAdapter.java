@@ -26,7 +26,7 @@ public class VenueCancellationAdapter implements VenueCancellationPort {
 
     @Override
     public CreatedRefund createRefund(UUID bookingId, UUID cancellationId, UUID processedBy) {
-        var refund = call(cancellationId, () -> client.createRefund(
+        VenueCancellationClient.RefundResponse refund = call(cancellationId, () -> client.createRefund(
                 cancellationId, new VenueCancellationClient.RefundRequest(bookingId, processedBy))).getData();
         if (refund == null || refund.refundId() == null) {
             throw new IllegalStateException("venue-service không trả về khoản hoàn của yêu cầu hủy " + cancellationId);

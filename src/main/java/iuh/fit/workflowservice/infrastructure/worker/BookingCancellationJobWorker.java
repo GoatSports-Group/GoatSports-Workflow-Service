@@ -13,6 +13,7 @@ import org.springframework.stereotype.Component;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Supplier;
 
 /**
  * Worker của process "Hủy đặt sân và hoàn tiền". Lỗi tạm (venue-service/payment-service chưa phản hồi) để Camunda
@@ -69,7 +70,7 @@ public class BookingCancellationJobWorker {
         });
     }
 
-    private static <T> T guard(java.util.function.Supplier<T> call) {
+    private static <T> T guard(Supplier<T> call) {
         try {
             return call.get();
         } catch (CancellationMissingException exception) {
