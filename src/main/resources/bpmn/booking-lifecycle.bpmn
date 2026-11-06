@@ -1,0 +1,493 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:modeler="http://camunda.org/schema/modeler/1.0" id="Definitions_BookingLifecycle" targetNamespace="http://goatsports.click/bpmn" exporter="Camunda Modeler" exporterVersion="5.52.0" modeler:executionPlatform="Camunda Cloud" modeler:executionPlatformVersion="8.9.0">
+  <bpmn:message id="Message_DepositPaid" name="BookingDepositPaid">
+    <bpmn:extensionElements>
+      <zeebe:subscription correlationKey="=bookingId" />
+    </bpmn:extensionElements>
+  </bpmn:message>
+  <bpmn:message id="Message_PaymentClosed" name="BookingPaymentClosed">
+    <bpmn:extensionElements>
+      <zeebe:subscription correlationKey="=bookingId" />
+    </bpmn:extensionElements>
+  </bpmn:message>
+  <bpmn:message id="Message_RemainingPaid" name="BookingRemainingPaid">
+    <bpmn:extensionElements>
+      <zeebe:subscription correlationKey="=bookingId" />
+    </bpmn:extensionElements>
+  </bpmn:message>
+  <bpmn:message id="Message_CheckedIn" name="BookingCheckedIn">
+    <bpmn:extensionElements>
+      <zeebe:subscription correlationKey="=bookingId" />
+    </bpmn:extensionElements>
+  </bpmn:message>
+  <bpmn:message id="Message_BookingCancelled" name="BookingCancelled">
+    <bpmn:extensionElements>
+      <zeebe:subscription correlationKey="=bookingId" />
+    </bpmn:extensionElements>
+  </bpmn:message>
+  <bpmn:error id="Error_BookingMissing" name="Booking missing" errorCode="BOOKING_NOT_FOUND" />
+  <bpmn:process id="Process_BookingLifecycle" name="Vòng đời đặt sân" isExecutable="true">
+    <bpmn:documentation>Đặt sân → cọc → thu phần còn lại → nhận sân → hoàn thành. Thao tác của người dùng do venue-service ghi ngay rồi báo message; các mốc giờ (hết giữ chỗ, không đến, hoàn thành) do process quyết định. Hủy sau khi đặt chạy ở Process_BookingCancellationRefund.</bpmn:documentation>
+    <bpmn:startEvent id="Start_BookingCreated" name="Người chơi nhấn đặt sân">
+      <bpmn:documentation>venue-service mở process ngay khi tạo booking (PENDING_PAYMENT; khách tại quầy thì CONFIRMED, bắt đầu thẳng ở bước chờ khách đến). Biến: bookingId, holdExpiresAt, playEndAt (ISO-8601 có múi giờ).</bpmn:documentation>
+      <bpmn:outgoing>Flow_Start</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:eventBasedGateway id="Gateway_WaitDeposit" name="Chờ tiền cọc">
+      <bpmn:incoming>Flow_Start</bpmn:incoming>
+      <bpmn:outgoing>Flow_ToDepositPaid</bpmn:outgoing>
+      <bpmn:outgoing>Flow_ToHoldExpired</bpmn:outgoing>
+      <bpmn:outgoing>Flow_ToPaymentClosed</bpmn:outgoing>
+    </bpmn:eventBasedGateway>
+    <bpmn:intermediateCatchEvent id="Event_DepositPaid" name="Đã đóng cọc">
+      <bpmn:documentation>venue-service đã ghi CONFIRMED, phát hành QR, gửi vé rồi mới báo.</bpmn:documentation>
+      <bpmn:incoming>Flow_ToDepositPaid</bpmn:incoming>
+      <bpmn:outgoing>Flow_DepositToConfirmed</bpmn:outgoing>
+      <bpmn:messageEventDefinition id="Message_DepositPaidDef" messageRef="Message_DepositPaid" />
+    </bpmn:intermediateCatchEvent>
+    <bpmn:intermediateCatchEvent id="Event_HoldExpired" name="Hết giờ giữ chỗ">
+      <bpmn:incoming>Flow_ToHoldExpired</bpmn:incoming>
+      <bpmn:outgoing>Flow_HoldExpiredToTask</bpmn:outgoing>
+      <bpmn:timerEventDefinition>
+        <bpmn:timeDate xsi:type="bpmn:tFormalExpression">=holdExpiresAt</bpmn:timeDate>
+      </bpmn:timerEventDefinition>
+    </bpmn:intermediateCatchEvent>
+    <bpmn:serviceTask id="Task_Expire" name="Ghi trạng thái: Hết hạn, nhả slot">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="booking-lifecycle.apply-state" retries="5" />
+        <zeebe:ioMapping>
+          <zeebe:input source="=&#34;EXPIRED&#34;" target="status" />
+          <zeebe:output source="=bookingStatus" target="bookingStatus" />
+        </zeebe:ioMapping>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_HoldExpiredToTask</bpmn:incoming>
+      <bpmn:outgoing>Flow_ExpireToGateway</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:exclusiveGateway id="Gateway_AfterExpire" name="Đơn đã đóng cọc?" default="Flow_ExpiredToEnd">
+      <bpmn:documentation>Message "Đã đóng cọc" bị lỡ thì venue-service không cho hết hạn và trả về CONFIRMED.</bpmn:documentation>
+      <bpmn:incoming>Flow_ExpireToGateway</bpmn:incoming>
+      <bpmn:outgoing>Flow_ExpireButPaid</bpmn:outgoing>
+      <bpmn:outgoing>Flow_ExpiredToEnd</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:endEvent id="End_Expired" name="Hết giờ giữ chỗ">
+      <bpmn:incoming>Flow_ExpiredToEnd</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:intermediateCatchEvent id="Event_PaymentClosed" name="Giao dịch cọc bị hủy / hết hạn">
+      <bpmn:documentation>payment-service báo giao dịch cọc kết thúc mà không thành công; venue-service đã ghi CANCELLED/EXPIRED và nhả slot.</bpmn:documentation>
+      <bpmn:incoming>Flow_ToPaymentClosed</bpmn:incoming>
+      <bpmn:outgoing>Flow_PaymentClosedToEnd</bpmn:outgoing>
+      <bpmn:messageEventDefinition id="Message_PaymentClosedDef" messageRef="Message_PaymentClosed" />
+    </bpmn:intermediateCatchEvent>
+    <bpmn:endEvent id="End_PaymentClosed" name="Không đóng cọc">
+      <bpmn:incoming>Flow_PaymentClosedToEnd</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:exclusiveGateway id="Gateway_Confirmed">
+      <bpmn:incoming>Flow_DepositToConfirmed</bpmn:incoming>
+      <bpmn:incoming>Flow_ExpireButPaid</bpmn:incoming>
+      <bpmn:outgoing>Flow_ConfirmedToArrival</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:eventBasedGateway id="Gateway_WaitArrival" name="Chờ khách đến quầy">
+      <bpmn:documentation>Nhận sân bắt buộc thu đủ phần còn lại trước (tiền mặt tại quầy hoặc payOS).</bpmn:documentation>
+      <bpmn:incoming>Flow_ConfirmedToArrival</bpmn:incoming>
+      <bpmn:outgoing>Flow_ToRemainingPaid</bpmn:outgoing>
+      <bpmn:outgoing>Flow_ToNoShowUnpaid</bpmn:outgoing>
+    </bpmn:eventBasedGateway>
+    <bpmn:intermediateCatchEvent id="Event_RemainingPaid" name="Đã thu phần còn lại">
+      <bpmn:documentation>Tiền mặt lúc nhận sân, tiền mặt ở trang Đơn đặt sân, hoặc payOS (Kafka).</bpmn:documentation>
+      <bpmn:incoming>Flow_ToRemainingPaid</bpmn:incoming>
+      <bpmn:outgoing>Flow_RemainingPaidToCheckIn</bpmn:outgoing>
+      <bpmn:messageEventDefinition id="Message_RemainingPaidDef" messageRef="Message_RemainingPaid" />
+    </bpmn:intermediateCatchEvent>
+    <bpmn:intermediateCatchEvent id="Timer_NoShowUnpaid" name="Hết giờ chơi, khách chưa đến">
+      <bpmn:incoming>Flow_ToNoShowUnpaid</bpmn:incoming>
+      <bpmn:outgoing>Flow_NoShowUnpaidToTask</bpmn:outgoing>
+      <bpmn:timerEventDefinition>
+        <bpmn:timeDate xsi:type="bpmn:tFormalExpression">=playEndAt</bpmn:timeDate>
+      </bpmn:timerEventDefinition>
+    </bpmn:intermediateCatchEvent>
+    <bpmn:eventBasedGateway id="Gateway_WaitCheckIn" name="Chờ quét nhận sân">
+      <bpmn:incoming>Flow_RemainingPaidToCheckIn</bpmn:incoming>
+      <bpmn:outgoing>Flow_ToCheckedIn</bpmn:outgoing>
+      <bpmn:outgoing>Flow_ToNoShowPaid</bpmn:outgoing>
+    </bpmn:eventBasedGateway>
+    <bpmn:intermediateCatchEvent id="Event_CheckedIn" name="Đã nhận sân">
+      <bpmn:incoming>Flow_ToCheckedIn</bpmn:incoming>
+      <bpmn:outgoing>Flow_CheckedInToPlay</bpmn:outgoing>
+      <bpmn:messageEventDefinition id="Message_CheckedInDef" messageRef="Message_CheckedIn" />
+    </bpmn:intermediateCatchEvent>
+    <bpmn:intermediateCatchEvent id="Timer_NoShowPaid" name="Hết giờ chơi, chưa quét">
+      <bpmn:incoming>Flow_ToNoShowPaid</bpmn:incoming>
+      <bpmn:outgoing>Flow_NoShowPaidToTask</bpmn:outgoing>
+      <bpmn:timerEventDefinition>
+        <bpmn:timeDate xsi:type="bpmn:tFormalExpression">=playEndAt</bpmn:timeDate>
+      </bpmn:timerEventDefinition>
+    </bpmn:intermediateCatchEvent>
+    <bpmn:serviceTask id="Task_NoShow" name="Ghi trạng thái: Không đến (giữ cọc)">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="booking-lifecycle.apply-state" retries="5" />
+        <zeebe:ioMapping>
+          <zeebe:input source="=&#34;NO_SHOW&#34;" target="status" />
+          <zeebe:output source="=bookingStatus" target="bookingStatus" />
+        </zeebe:ioMapping>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_NoShowUnpaidToTask</bpmn:incoming>
+      <bpmn:incoming>Flow_NoShowPaidToTask</bpmn:incoming>
+      <bpmn:outgoing>Flow_NoShowToGateway</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:exclusiveGateway id="Gateway_AfterNoShow" name="Khách đã nhận sân?" default="Flow_NoShowToEnd">
+      <bpmn:documentation>Message "Đã nhận sân" bị lỡ thì venue-service không ghi NO_SHOW và trả về CHECKED_IN.</bpmn:documentation>
+      <bpmn:incoming>Flow_NoShowToGateway</bpmn:incoming>
+      <bpmn:outgoing>Flow_NoShowButCheckedIn</bpmn:outgoing>
+      <bpmn:outgoing>Flow_NoShowToEnd</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:endEvent id="End_NoShow" name="Không đến nhận sân">
+      <bpmn:incoming>Flow_NoShowToEnd</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:intermediateCatchEvent id="Event_PlayEnded" name="Hết giờ chơi">
+      <bpmn:incoming>Flow_CheckedInToPlay</bpmn:incoming>
+      <bpmn:outgoing>Flow_PlayEndedToComplete</bpmn:outgoing>
+      <bpmn:timerEventDefinition>
+        <bpmn:timeDate xsi:type="bpmn:tFormalExpression">=playEndAt</bpmn:timeDate>
+      </bpmn:timerEventDefinition>
+    </bpmn:intermediateCatchEvent>
+    <bpmn:serviceTask id="Task_Complete" name="Ghi trạng thái: Hoàn thành">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="booking-lifecycle.apply-state" retries="5" />
+        <zeebe:ioMapping>
+          <zeebe:input source="=&#34;COMPLETED&#34;" target="status" />
+          <zeebe:output source="=bookingStatus" target="bookingStatus" />
+        </zeebe:ioMapping>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_NoShowButCheckedIn</bpmn:incoming>
+      <bpmn:incoming>Flow_PlayEndedToComplete</bpmn:incoming>
+      <bpmn:outgoing>Flow_CompleteToEnd</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:endEvent id="End_Completed" name="Hoàn thành giờ chơi">
+      <bpmn:incoming>Flow_CompleteToEnd</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_Start" sourceRef="Start_BookingCreated" targetRef="Gateway_WaitDeposit" />
+    <bpmn:sequenceFlow id="Flow_ToDepositPaid" sourceRef="Gateway_WaitDeposit" targetRef="Event_DepositPaid" />
+    <bpmn:sequenceFlow id="Flow_ToHoldExpired" sourceRef="Gateway_WaitDeposit" targetRef="Event_HoldExpired" />
+    <bpmn:sequenceFlow id="Flow_ToPaymentClosed" sourceRef="Gateway_WaitDeposit" targetRef="Event_PaymentClosed" />
+    <bpmn:sequenceFlow id="Flow_DepositToConfirmed" sourceRef="Event_DepositPaid" targetRef="Gateway_Confirmed" />
+    <bpmn:sequenceFlow id="Flow_HoldExpiredToTask" sourceRef="Event_HoldExpired" targetRef="Task_Expire" />
+    <bpmn:sequenceFlow id="Flow_ExpireToGateway" sourceRef="Task_Expire" targetRef="Gateway_AfterExpire" />
+    <bpmn:sequenceFlow id="Flow_ExpireButPaid" name="Đã cọc" sourceRef="Gateway_AfterExpire" targetRef="Gateway_Confirmed">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">=bookingStatus = "CONFIRMED"</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_ExpiredToEnd" name="Không" sourceRef="Gateway_AfterExpire" targetRef="End_Expired" />
+    <bpmn:sequenceFlow id="Flow_PaymentClosedToEnd" sourceRef="Event_PaymentClosed" targetRef="End_PaymentClosed" />
+    <bpmn:sequenceFlow id="Flow_ConfirmedToArrival" sourceRef="Gateway_Confirmed" targetRef="Gateway_WaitArrival" />
+    <bpmn:sequenceFlow id="Flow_ToRemainingPaid" sourceRef="Gateway_WaitArrival" targetRef="Event_RemainingPaid" />
+    <bpmn:sequenceFlow id="Flow_ToNoShowUnpaid" sourceRef="Gateway_WaitArrival" targetRef="Timer_NoShowUnpaid" />
+    <bpmn:sequenceFlow id="Flow_RemainingPaidToCheckIn" sourceRef="Event_RemainingPaid" targetRef="Gateway_WaitCheckIn" />
+    <bpmn:sequenceFlow id="Flow_ToCheckedIn" sourceRef="Gateway_WaitCheckIn" targetRef="Event_CheckedIn" />
+    <bpmn:sequenceFlow id="Flow_ToNoShowPaid" sourceRef="Gateway_WaitCheckIn" targetRef="Timer_NoShowPaid" />
+    <bpmn:sequenceFlow id="Flow_NoShowUnpaidToTask" sourceRef="Timer_NoShowUnpaid" targetRef="Task_NoShow" />
+    <bpmn:sequenceFlow id="Flow_NoShowPaidToTask" sourceRef="Timer_NoShowPaid" targetRef="Task_NoShow" />
+    <bpmn:sequenceFlow id="Flow_NoShowToGateway" sourceRef="Task_NoShow" targetRef="Gateway_AfterNoShow" />
+    <bpmn:sequenceFlow id="Flow_NoShowButCheckedIn" name="Đã nhận" sourceRef="Gateway_AfterNoShow" targetRef="Task_Complete">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">=bookingStatus = "CHECKED_IN"</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_NoShowToEnd" name="Chưa" sourceRef="Gateway_AfterNoShow" targetRef="End_NoShow" />
+    <bpmn:sequenceFlow id="Flow_CheckedInToPlay" sourceRef="Event_CheckedIn" targetRef="Event_PlayEnded" />
+    <bpmn:sequenceFlow id="Flow_PlayEndedToComplete" sourceRef="Event_PlayEnded" targetRef="Task_Complete" />
+    <bpmn:sequenceFlow id="Flow_CompleteToEnd" sourceRef="Task_Complete" targetRef="End_Completed" />
+    <bpmn:subProcess id="SubProcess_Cancelled" name="Flow hủy sân đã chấp thuận" triggeredByEvent="true">
+      <bpmn:startEvent id="Start_BookingCancelled" name="Yêu cầu hủy được chấp thuận">
+        <bpmn:documentation>venue-service báo khi flow hủy sân đưa đơn sang CANCELLED / REFUND_PENDING (đã nhả slot). Chủ sân từ chối thì không báo, flow đặt sân chạy tiếp.</bpmn:documentation>
+        <bpmn:outgoing>Flow_CancelledToEnd</bpmn:outgoing>
+        <bpmn:messageEventDefinition id="Message_BookingCancelledDef" messageRef="Message_BookingCancelled" />
+      </bpmn:startEvent>
+      <bpmn:endEvent id="End_Cancelled" name="Đã hủy theo flow hủy sân">
+        <bpmn:incoming>Flow_CancelledToEnd</bpmn:incoming>
+      </bpmn:endEvent>
+      <bpmn:sequenceFlow id="Flow_CancelledToEnd" sourceRef="Start_BookingCancelled" targetRef="End_Cancelled" />
+    </bpmn:subProcess>
+    <bpmn:subProcess id="SubProcess_BookingMissing" name="Đơn không còn trong venue-service" triggeredByEvent="true">
+      <bpmn:startEvent id="Start_BookingMissing" name="Không tìm thấy đơn">
+        <bpmn:outgoing>Flow_MissingToEnd</bpmn:outgoing>
+        <bpmn:errorEventDefinition id="ErrorDef_BookingMissing" errorRef="Error_BookingMissing" />
+      </bpmn:startEvent>
+      <bpmn:endEvent id="End_BookingMissing" name="Bỏ qua">
+        <bpmn:incoming>Flow_MissingToEnd</bpmn:incoming>
+      </bpmn:endEvent>
+      <bpmn:sequenceFlow id="Flow_MissingToEnd" sourceRef="Start_BookingMissing" targetRef="End_BookingMissing" />
+    </bpmn:subProcess>
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_BookingLifecycle">
+    <bpmndi:BPMNPlane id="BPMNPlane_BookingLifecycle" bpmnElement="Process_BookingLifecycle">
+      <bpmndi:BPMNShape id="Start_BookingCreated_di" bpmnElement="Start_BookingCreated">
+        <dc:Bounds x="222" y="132" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="160" y="174" width="131" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_WaitDeposit_di" bpmnElement="Gateway_WaitDeposit">
+        <dc:Bounds x="305" y="125" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="298" y="93" width="63" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_DepositPaid_di" bpmnElement="Event_DepositPaid">
+        <dc:Bounds x="412" y="132" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="399" y="174" width="62" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_HoldExpired_di" bpmnElement="Event_HoldExpired">
+        <dc:Bounds x="412" y="262" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="392" y="304" width="76" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_Expire_di" bpmnElement="Task_Expire">
+        <dc:Bounds x="500" y="240" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_AfterExpire_di" bpmnElement="Gateway_AfterExpire" isMarkerVisible="true">
+        <dc:Bounds x="645" y="255" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="701" y="225" width="65" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="End_Expired_di" bpmnElement="End_Expired">
+        <dc:Bounds x="652" y="382" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="632" y="424" width="76" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_PaymentClosed_di" bpmnElement="Event_PaymentClosed">
+        <dc:Bounds x="412" y="382" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="377" y="424" width="106" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="End_PaymentClosed_di" bpmnElement="End_PaymentClosed">
+        <dc:Bounds x="532" y="382" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="510" y="424" width="80" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_Confirmed_di" bpmnElement="Gateway_Confirmed" isMarkerVisible="true">
+        <dc:Bounds x="645" y="125" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_WaitArrival_di" bpmnElement="Gateway_WaitArrival">
+        <dc:Bounds x="745" y="125" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="718" y="93" width="103" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_RemainingPaid_di" bpmnElement="Event_RemainingPaid">
+        <dc:Bounds x="852" y="132" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="823" y="174" width="95" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Timer_NoShowUnpaid_di" bpmnElement="Timer_NoShowUnpaid">
+        <dc:Bounds x="852" y="262" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="763" y="302" width="79" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_WaitCheckIn_di" bpmnElement="Gateway_WaitCheckIn">
+        <dc:Bounds x="945" y="125" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="922" y="93" width="95" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_CheckedIn_di" bpmnElement="Event_CheckedIn">
+        <dc:Bounds x="1052" y="132" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1039" y="174" width="63" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Timer_NoShowPaid_di" bpmnElement="Timer_NoShowPaid">
+        <dc:Bounds x="1052" y="262" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1098" y="266" width="120" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_NoShow_di" bpmnElement="Task_NoShow">
+        <dc:Bounds x="1020" y="360" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_AfterNoShow_di" bpmnElement="Gateway_AfterNoShow" isMarkerVisible="true">
+        <dc:Bounds x="1175" y="375" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1149" y="353" width="101" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="End_NoShow_di" bpmnElement="End_NoShow">
+        <dc:Bounds x="1182" y="492" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1149" y="534" width="102" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_PlayEnded_di" bpmnElement="Event_PlayEnded">
+        <dc:Bounds x="1172" y="132" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1160" y="174" width="61" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_Complete_di" bpmnElement="Task_Complete">
+        <dc:Bounds x="1270" y="110" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="End_Completed_di" bpmnElement="End_Completed">
+        <dc:Bounds x="1432" y="132" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1400" y="174" width="101" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="SubProcess_Cancelled_di" bpmnElement="SubProcess_Cancelled" isExpanded="true">
+        <dc:Bounds x="230" y="590" width="560" height="130" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Start_BookingCancelled_di" bpmnElement="Start_BookingCancelled">
+        <dc:Bounds x="292" y="637" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="251" y="679" width="169" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="End_Cancelled_di" bpmnElement="End_Cancelled">
+        <dc:Bounds x="692" y="637" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="659" y="679" width="103" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_CancelledToEnd_di" bpmnElement="Flow_CancelledToEnd">
+        <di:waypoint x="328" y="655" />
+        <di:waypoint x="692" y="655" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="SubProcess_BookingMissing_di" bpmnElement="SubProcess_BookingMissing" isExpanded="true">
+        <dc:Bounds x="830" y="590" width="500" height="130" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Start_BookingMissing_di" bpmnElement="Start_BookingMissing">
+        <dc:Bounds x="892" y="637" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="862" y="679" width="97" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="End_BookingMissing_di" bpmnElement="End_BookingMissing">
+        <dc:Bounds x="1232" y="637" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1233" y="679" width="35" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_MissingToEnd_di" bpmnElement="Flow_MissingToEnd">
+        <di:waypoint x="928" y="655" />
+        <di:waypoint x="1232" y="655" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Start_di" bpmnElement="Flow_Start">
+        <di:waypoint x="258" y="150" />
+        <di:waypoint x="305" y="150" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ToDepositPaid_di" bpmnElement="Flow_ToDepositPaid">
+        <di:waypoint x="355" y="150" />
+        <di:waypoint x="412" y="150" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ToHoldExpired_di" bpmnElement="Flow_ToHoldExpired">
+        <di:waypoint x="330" y="175" />
+        <di:waypoint x="330" y="280" />
+        <di:waypoint x="412" y="280" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ToPaymentClosed_di" bpmnElement="Flow_ToPaymentClosed">
+        <di:waypoint x="330" y="175" />
+        <di:waypoint x="330" y="400" />
+        <di:waypoint x="412" y="400" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_DepositToConfirmed_di" bpmnElement="Flow_DepositToConfirmed">
+        <di:waypoint x="448" y="150" />
+        <di:waypoint x="645" y="150" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_HoldExpiredToTask_di" bpmnElement="Flow_HoldExpiredToTask">
+        <di:waypoint x="448" y="280" />
+        <di:waypoint x="500" y="280" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ExpireToGateway_di" bpmnElement="Flow_ExpireToGateway">
+        <di:waypoint x="600" y="280" />
+        <di:waypoint x="645" y="280" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ExpireButPaid_di" bpmnElement="Flow_ExpireButPaid">
+        <di:waypoint x="670" y="255" />
+        <di:waypoint x="670" y="175" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="622" y="215" width="35" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ExpiredToEnd_di" bpmnElement="Flow_ExpiredToEnd">
+        <di:waypoint x="670" y="305" />
+        <di:waypoint x="670" y="382" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="690" y="311" width="32" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_PaymentClosedToEnd_di" bpmnElement="Flow_PaymentClosedToEnd">
+        <di:waypoint x="448" y="400" />
+        <di:waypoint x="532" y="400" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ConfirmedToArrival_di" bpmnElement="Flow_ConfirmedToArrival">
+        <di:waypoint x="695" y="150" />
+        <di:waypoint x="745" y="150" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ToRemainingPaid_di" bpmnElement="Flow_ToRemainingPaid">
+        <di:waypoint x="795" y="150" />
+        <di:waypoint x="852" y="150" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ToNoShowUnpaid_di" bpmnElement="Flow_ToNoShowUnpaid">
+        <di:waypoint x="770" y="175" />
+        <di:waypoint x="770" y="280" />
+        <di:waypoint x="852" y="280" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_RemainingPaidToCheckIn_di" bpmnElement="Flow_RemainingPaidToCheckIn">
+        <di:waypoint x="888" y="150" />
+        <di:waypoint x="945" y="150" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_NoShowUnpaidToTask_di" bpmnElement="Flow_NoShowUnpaidToTask">
+        <di:waypoint x="870" y="298" />
+        <di:waypoint x="870" y="400" />
+        <di:waypoint x="1020" y="400" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ToCheckedIn_di" bpmnElement="Flow_ToCheckedIn">
+        <di:waypoint x="995" y="150" />
+        <di:waypoint x="1052" y="150" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ToNoShowPaid_di" bpmnElement="Flow_ToNoShowPaid">
+        <di:waypoint x="970" y="175" />
+        <di:waypoint x="970" y="280" />
+        <di:waypoint x="1052" y="280" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_CheckedInToPlay_di" bpmnElement="Flow_CheckedInToPlay">
+        <di:waypoint x="1088" y="150" />
+        <di:waypoint x="1172" y="150" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_NoShowPaidToTask_di" bpmnElement="Flow_NoShowPaidToTask">
+        <di:waypoint x="1070" y="298" />
+        <di:waypoint x="1070" y="360" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_NoShowToGateway_di" bpmnElement="Flow_NoShowToGateway">
+        <di:waypoint x="1120" y="400" />
+        <di:waypoint x="1175" y="400" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_NoShowButCheckedIn_di" bpmnElement="Flow_NoShowButCheckedIn">
+        <di:waypoint x="1225" y="400" />
+        <di:waypoint x="1320" y="400" />
+        <di:waypoint x="1320" y="190" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1242" y="382" width="42" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_NoShowToEnd_di" bpmnElement="Flow_NoShowToEnd">
+        <di:waypoint x="1200" y="425" />
+        <di:waypoint x="1200" y="492" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1222" y="431" width="28" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_PlayEndedToComplete_di" bpmnElement="Flow_PlayEndedToComplete">
+        <di:waypoint x="1208" y="150" />
+        <di:waypoint x="1270" y="150" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_CompleteToEnd_di" bpmnElement="Flow_CompleteToEnd">
+        <di:waypoint x="1370" y="150" />
+        <di:waypoint x="1432" y="150" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>
